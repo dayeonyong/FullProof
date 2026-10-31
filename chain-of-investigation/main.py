@@ -53,7 +53,21 @@ except ImportError:
         return {"case_id": case_id, "status": "UNAVAILABLE", "message": "AI module unavailable"}
 
 app = FastAPI(title="FullProof API", version="2.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5500", "http://127.0.0.1:5500",], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "https://fullproof-frontend.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Mentor follow-up: old agency-signed-verdict routes are no longer executable.
 @app.middleware("http")
 async def disable_legacy_verdict_routes(request, call_next):
