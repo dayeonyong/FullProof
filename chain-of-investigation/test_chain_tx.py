@@ -65,6 +65,31 @@ class TransactionHelperTests(unittest.TestCase):
                     submit_transaction(w3, Mock())
         w3.eth.send_raw_transaction.assert_not_called()
 
+    def test_sepolia_server_wallet_cannot_submit_review_or_close(self):
+        w3 = Mock()
+        w3.eth.chain_id = SEPOLIA_CHAIN_ID
+        for role in ("admin", "review", "close"):
+            with self.subTest(role=role):
+                with self.assertRaises(TransactionConfigurationError):
+                    submit_transaction(w3, Mock(), role=role)
+
+    def test_admin_endpoints_have_sepolia_guard(self):
+        # Static regression check: never silently remove the admin-only guard
+        # without also adding a real wallet-signed Ethereum transaction flow.
+        import ast
+        from pathlib import Path
+        source = Path(__file__).with_name("main.py").read_text(encoding="utf-8")
+        module = ast.parse(source)
+        funcs = {n.name: n for n in module.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        for name in ("close_case_endpoint", "create_v11_review"):
+            with self.subTest(endpoint=name):
+                calls = [
+                    node.func.id
+                    for node in ast.walk(funcs[name])
+                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                ]
+                self.assertIn("require_admin_transaction_wallet", calls)
+
     def test_admin_role_cannot_use_generic_server_wallet(self):
         w3 = Mock()
         w3.eth.chain_id = SEPOLIA_CHAIN_ID
