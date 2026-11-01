@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 from chain_tx import (
     HARDHAT_CHAIN_ID, SEPOLIA_CHAIN_ID,
-    TransactionConfigurationError, submit_transaction,
+    TransactionConfigurationError, get_server_address, submit_transaction,
 )
 
 
@@ -39,6 +39,31 @@ class TransactionHelperTests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(TransactionConfigurationError):
                 submit_transaction(w3, Mock())
+
+    def test_mismatched_expected_signer_address_is_rejected(self):
+        wallet = Mock()
+        wallet.address = "0x123"
+        with patch.dict(os.environ, {
+            "SEPOLIA_TX_PRIVATE_KEY": "placeholder",
+            "SEPOLIA_TX_ADDRESS": "0x456",
+        }, clear=True):
+            with patch("chain_tx.Account.from_key", return_value=wallet):
+                with self.assertRaises(TransactionConfigurationError):
+                    get_server_address()
+
+    def test_mismatched_signer_does_not_broadcast(self):
+        w3 = Mock()
+        w3.eth.chain_id = SEPOLIA_CHAIN_ID
+        wallet = Mock()
+        wallet.address = "0x123"
+        with patch.dict(os.environ, {
+            "SEPOLIA_TX_PRIVATE_KEY": "placeholder",
+            "SEPOLIA_TX_ADDRESS": "0x456",
+        }, clear=True):
+            with patch("chain_tx.Account.from_key", return_value=wallet):
+                with self.assertRaises(TransactionConfigurationError):
+                    submit_transaction(w3, Mock())
+        w3.eth.send_raw_transaction.assert_not_called()
 
     def test_admin_role_cannot_use_generic_server_wallet(self):
         w3 = Mock()
