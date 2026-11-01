@@ -5,6 +5,7 @@ environment-configured transaction key and never reads a key from source.
 This module deliberately does not provide administrator authorization.
 """
 import os
+from threading import Lock
 
 from eth_account import Account
 from web3 import Web3
@@ -12,6 +13,7 @@ from web3 import Web3
 
 SEPOLIA_CHAIN_ID = 11155111
 HARDHAT_CHAIN_ID = 31337
+_tx_lock = Lock()
 
 
 class TransactionConfigurationError(RuntimeError):
@@ -23,7 +25,11 @@ def get_server_address():
     key = os.getenv("SEPOLIA_TX_PRIVATE_KEY")
     if not key:
         raise TransactionConfigurationError("SEPOLIA_TX_PRIVATE_KEY is not configured")
-    return Account.from_key(key).address
+    account = Account.from_key(key)
+    expected = os.getenv("SEPOLIA_TX_ADDRESS")
+    if expected and account.address.lower() != expected.lower():
+        raise TransactionConfigurationError("Sepolia signer does not match SEPOLIA_TX_ADDRESS")
+    return account.address
 
 
 def submit_transaction(w3: Web3, function, *, role="sender"):
@@ -52,12 +58,20 @@ def submit_transaction(w3: Web3, function, *, role="sender"):
         raise TransactionConfigurationError("SEPOLIA_TX_PRIVATE_KEY is not configured")
 
     account = Account.from_key(key)
-    gas_estimate = function.estimate_gas({"from": account.address})
-    tx = function.build_transaction({
-        "from": account.address,
-        "chainId": SEPOLIA_CHAIN_ID,
-        "nonce": w3.eth.get_transaction_count(account.address, "pending"),
-        "gas": gas_estimate + max(gas_estimate // 5, 10000),
-    })
-    signed = account.sign_transaction(tx)
-    return w3.eth.send_raw_transaction(signed.raw_transaction)
+    expected = os.getenv("SEPOLIA_TX_ADDRESS")
+    if expected and account.address.lower() != expected.lower():
+        raise TransactionConfigurationError("Sepolia signer does not match SEPOLIA_TX_ADDRESS")
+
+    # A lock avoids two simultaneous requests reading the same pending nonce
+    # inside this Python process. Multi-worker deployments need a shared
+    # nonce allocator or transaction queue before production use.
+    with _tx_lock:
+        gas_estimate = function.estimate_gas({"from": account.address})
+        tx = function.build_transaction({
+            "from": account.address,
+            "chainId": SEPOLIA_CHAIN_ID,
+            "nonce": w3.eth.get_transaction_count(account.address, "pending"),
+            "gas": gas_estimate + max(gas_estimate // 5, 10000),
+        })
+        signed = account.sign_transaction(tx)
+        return w3.eth.send_raw_transaction(signed.raw_transaction)
