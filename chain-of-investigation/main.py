@@ -186,6 +186,21 @@ def submit_contract_transaction(contract_function, role="sender"):
     return submit_transaction(w3, contract_function, role=role)
 
 
+def require_admin_transaction_wallet():
+    """Prevent server-side admin writes from using an unlocked RPC account.
+
+    Signed review/close request messages prove intent but are not Ethereum
+    transaction signatures. Sepolia needs an administrator-signed transaction
+    from MetaMask or another explicitly authorized signer.
+    """
+    if w3.eth.chain_id == 11155111:
+        raise HTTPException(
+            503,
+            "Administrator transaction must be signed by the admin wallet; "
+            "Sepolia browser-wallet transaction submission is not configured"
+        )
+
+
 def confirmed(tx):
     receipt = w3.eth.wait_for_transaction_receipt(tx, timeout=120)
     if receipt.status != 1:
@@ -1968,6 +1983,7 @@ def close_case_endpoint(
         )
 
     # 7. 온체인 사건 종결
+    require_admin_transaction_wallet()
     try:
         tx_hash = close_function.transact({
             "from": recovered
@@ -2993,7 +3009,7 @@ def create_v11_review(
         )
 
     admin = recovered
-
+    require_admin_transaction_wallet()
 
     # 관리자 권한은 Solidity onlyAdmin에서 강제한다.
     # 트랜잭션 제출 전에 사전 검증도 수행한다.
