@@ -27,6 +27,7 @@ from fastapi import FastAPI, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from web3 import Web3
+from chain_tx import submit_transaction, get_server_address
 from hash_utils import hash_claim_text
 
 from database import save_v11_store, load_v11_store
@@ -141,6 +142,8 @@ def get_v11_system_status():
 
 
 def sender():
+    if w3.eth.chain_id == 11155111:
+        return get_server_address()
     accounts = w3.eth.accounts
     if not accounts:
         raise HTTPException(503, "No unlocked local transaction account available")
@@ -150,6 +153,12 @@ def sender():
 def verification_sender():
     """v1.1 Verification 전용 시스템 기록자 계정"""
     require_chain()
+
+    if w3.eth.chain_id == 11155111:
+        recorder = get_server_address()
+        if not contract.functions.isVerificationRecorder(recorder).call():
+            raise HTTPException(403, "Server wallet is not an authorized Verification recorder")
+        return recorder
 
     accounts = w3.eth.accounts
     if len(accounts) < 2:
@@ -167,6 +176,15 @@ def verification_sender():
         )
 
     return recorder
+
+def submit_contract_transaction(contract_function, role="sender"):
+    """Submit using the signer appropriate for the current network."""
+    if role == "verification":
+        verification_sender()
+    else:
+        sender()
+    return submit_transaction(w3, contract_function, role=role)
+
 
 def confirmed(tx):
     receipt = w3.eth.wait_for_transaction_receipt(tx, timeout=120)
@@ -708,7 +726,7 @@ def anchor_v11_verification(result):
 
     from mentor_support import stage_result, note_submission
     stage_result(result)
-    tx = contract.functions.anchorVerification(
+    tx = submit_contract_transaction(contract.functions.anchorVerification(
             case_uint(result["case_id"]),
             result["step_id"],
             verification_id_hash,
@@ -721,9 +739,7 @@ def anchor_v11_verification(result):
             result["policy_hash"],
             verification_hash,
             verdict_map[result["verdict"]]
-        ).transact({
-            "from": verification_sender()
-        })
+        ), role="verification")
     note_submission(tx)
     tx_hash = confirmed(tx)
 
@@ -1089,7 +1105,7 @@ def create_case(data: CaseCreateSchema):
     if data.case_id in cases_db:
         raise HTTPException(400, "Case already exists")
     try:
-        tx = confirmed(contract.functions.createCase(case_uint(data.case_id)).transact({"from": sender()}))
+        tx = confirmed(submit_contract_transaction(contract.functions.createCase(case_uint(data.case_id))))
     except HTTPException:
         raise
     except Exception as e:
@@ -1114,7 +1130,7 @@ def add_case_step(case_id: str, data: StepCreateSchema):
     if case["is_closed"]:
         raise HTTPException(400, "Cannot modify closed case")
     try:
-        tx = confirmed(contract.functions.addStep(case_uint(case_id), data.step_name, data.is_required).transact({"from": sender()}))
+        tx = confirmed(submit_contract_transaction(contract.functions.addStep(case_uint(case_id), data.step_name, data.is_required)))
     except HTTPException:
         raise
     except Exception as e:
@@ -1165,7 +1181,7 @@ def create_claim(case_id: str, data: ClaimCreateSchema):
     # 4. 블록체인에 Claim 기록
     try:
         tx_hash = confirmed(
-            contract.functions.anchorClaim(
+            submit_contract_transaction(contract.functions.anchorClaim(
                 case_uint(case_id),
                 data.step_id,
                 claim_id_hash,
@@ -1173,7 +1189,7 @@ def create_claim(case_id: str, data: ClaimCreateSchema):
                 claim_hash,
                 author_id_hash,
                 input_at
-            ).transact({"from": sender()})
+            ))
         )
 
     except HTTPException:
@@ -1388,10 +1404,10 @@ def anchor_agency_proof(data: ProofAttestationSchema):
     # 5. 기관 서명 검증 및 온체인 기록
     try:
         tx_hash = confirmed(
-            contract.functions.anchorProofAttestation(
+            submit_contract_transaction(contract.functions.anchorProofAttestation(
                 request,
                 data.signature
-            ).transact({"from": sender()})
+            ))
         )
 
     except HTTPException:
@@ -1496,7 +1512,7 @@ def verify_and_anchor_step(data: VerifyRequestSchema):
         claim_hash, proof_hash = canonical_hash(claim), canonical_hash(data.proof)
         request = {"caseId": case_uint(data.case_id), "stepId": data.step_id, "claimHash": claim_hash, "proofHash": proof_hash, "result": result, "evidenceTimestamp": data.evidence_timestamp, "nonce": data.nonce, "deadline": data.deadline, "agency": Web3.to_checksum_address(data.agency)}
         recovered = validate_proof(request, data.signature)
-        tx = confirmed(contract.functions.anchorProof(request["caseId"], request["stepId"], claim_hash, proof_hash, result, data.evidence_timestamp, data.deadline, data.nonce, request["agency"], data.signature).transact({"from": sender()}))
+        tx = confirmed(submit_contract_transaction(contract.functions.anchorProof(request["caseId"], request["stepId"], claim_hash, proof_hash, result, data.evidence_timestamp, data.deadline, data.nonce, request["agency"], data.signature)))
     except HTTPException:
         raise
     except Exception as e:
@@ -1662,9 +1678,7 @@ def anchor_signed_proof(data: AnchorProofSchema):
 
         # 8. 블록체인에 Proof 기록
         tx = confirmed(
-            contract.functions.anchorProof(*args).transact(
-                {"from": sender()}
-            )
+            submit_contract_transaction(contract.functions.anchorProof(*args))
         )
 
         # 성공한 Proof 트랜잭션의 블록 정보 조회
