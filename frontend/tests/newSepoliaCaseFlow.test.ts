@@ -25,6 +25,9 @@ describe('Backend-owned case list',()=>{
   expect(dashboard).toContain('로컬 시연 · 읽기 전용');
   expect(dashboard).toContain('현재 Sepolia에 등록된 사건이 아니며');
  });
+ it('routes Vercel API calls through same-origin /backend proxy',()=>{
+  expect(official).toContain("window.location.hostname.endsWith('.vercel.app')?'/backend'");
+ });
  it('preserves MetaMask-backed creation code separately',()=>{
   expect(official).toContain('await createSepoliaDemoCase(id');
   expect(official).toContain('/api/v1/browser-transactions/cases/confirm');
