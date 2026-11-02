@@ -293,6 +293,34 @@ def confirm_browser_case_close(case_id: str, body: BrowserCloseConfirmation):
             "close_reason": body.reason.strip()}
 
 
+
+class BrowserCasePrepareRequest(BaseModel):
+    case_id: str
+    police_address: str
+
+
+@app.post("/api/v1/browser-transactions/cases/prepare")
+def prepare_browser_case_creation(body: BrowserCasePrepareRequest):
+    from browser_case import prepare_police_case_creation
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    if body.case_id in cases_db:
+        raise HTTPException(409, "Case already exists")
+    try:
+        tx = prepare_police_case_creation(w3, contract, body.case_id, body.police_address)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    except Exception as exc:
+        raise HTTPException(409, f"Case creation preflight failed: {exc}")
+    return {"from": body.police_address, "to": tx["to"], "data": tx["data"],
+            "gas": hex(tx["gas"]), "value": hex(tx.get("value", 0)),
+            "case_id": body.case_id}
+
+
+
 def require_admin_transaction_wallet():
     """Prevent server-side admin writes from using an unlocked RPC account.
 
