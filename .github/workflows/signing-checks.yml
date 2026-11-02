@@ -33,4 +33,4 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install web3 eth-account
-      - run: python -m unittest test_browser_tx.py test_browser_admin_prepare.py test_browser_close_integration.py test_close_tx_persistence.py test_browser_review_routes.py test_demo_agency_fallback.py test_public_capabilities.py test_public_write_guard.py test_browser_police_case.py test_browser_step_routes.py test_browser_claim_prepare.py test_claim_event_validation.py test_browser_proof_routes.py test_verification_calldata.py -v
+      - run: python -m unittest test_browser_tx.py test_browser_admin_prepare.py test_browser_close_integration.py test_close_tx_persistence.py test_browser_review_routes.py test_demo_agency_fallback.py test_public_capabilities.py test_public_write_guard.py test_browser_police_case.py test_browser_step_routes.py test_browser_claim_prepare.py test_claim_event_validation.py test_browser_proof_routes.py test_verification_calldata.py test_browser_verification_routes.py -v
