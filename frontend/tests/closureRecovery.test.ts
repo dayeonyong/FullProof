@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
 
 describe('Sepolia closure recovery path',()=>{
- const source=readFileSync(new URL('../src/official.ts',import.meta.url),'utf8');
+ const source=readFileSync('src/official.ts','utf8');
  it('checks saved hash before attempting a new transaction',()=>{
   const pending=source.indexOf('const stored=sessionStorage.getItem(pendingKey)');
   const sending=source.indexOf('txHash=await sendWalletContractTransaction(');
