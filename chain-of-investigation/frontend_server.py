@@ -75,6 +75,8 @@ def public_config():
     chain = {'available': available}
     if available:
         agency = os.getenv('UI_AGENCY_ADDRESS', '')
+        if not agency and core.w3.eth.chain_id == 11155111:
+            agency = '0x4A8641Dc48C3fFE74fc02034e80910402833f9B1'  # public Sepolia demo agency only
         signer = None
         if agency and core.Web3.is_address(agency):
             info = core.contract.functions.agencies(core.Web3.to_checksum_address(agency)).call()
