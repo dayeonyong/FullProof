@@ -90,7 +90,48 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
  if(match){
   const c=await findVerification(match[1]),v=c.verifications.find(x=>x.verification_id===match![1])!;
   if(!b)return {items:c.reviews?.filter(x=>x.verification_id===v.verification_id)||[]};
-  const config=await getConfig(),data:Record<string,unknown>={review_status:b.review_status,reason_code:null,reason_text:b.reason_text,nonce:crypto.randomUUID(),deadline:Math.floor(Date.now()/1000)+900};
+  const config=await getConfig();
+  if(config.chain.chain_id===11155111){
+   const admin=config.chain.admin_address;
+   if(!admin||!config.chain.contract_address)throw Error('관리자 계정 설정을 확인해 주세요.');
+   const account=await walletAccount(admin,11155111,config.chain.rpc_url);
+   const provider=window.ethereum;
+   if(!provider)throw Error('MetaMask가 필요합니다.');
+   const reviewStatus=String(b.review_status);
+   const reason=String(b.reason_text||'');
+   const pendingKey='fullproof.sepolia.review.'+config.chain.contract_address.toLowerCase()+'.'+v.verification_id;
+   let pending:{txHash:string;account:string;reviewStatus:string;reason:string}|null=null;
+   const stored=sessionStorage.getItem(pendingKey);
+   if(stored){
+    try{pending=JSON.parse(stored) as typeof pending}
+    catch{throw Error('이전 관리자 검토 기록을 읽지 못했습니다. 거래 기록을 확인해 주세요.')}
+   }
+   if(pending&&(pending.account.toLowerCase()!==account.toLowerCase()||pending.reviewStatus!==reviewStatus||pending.reason!==reason))
+    throw Error('이미 제출한 관리자 검토 거래가 있습니다. 기존 처리 상태를 확인해 주세요.');
+   let txHash=pending?.txHash;
+   if(!txHash){
+    const prepared=await request<{from:string;to:string;data:string;gas:string;value:string}>(
+     '/api/v1/browser-transactions/verifications/'+encodeURIComponent(v.verification_id)+'/reviews/prepare',
+     {admin_address:account,review_status:reviewStatus,reason_code:null,reason_text:reason});
+    if(prepared.from.toLowerCase()!==account.toLowerCase()||
+       prepared.to.toLowerCase()!==config.chain.contract_address.toLowerCase())throw Error('관리자 거래 계약이 일치하지 않습니다.');
+    txHash=await sendWalletContractTransaction(provider,prepared);
+    sessionStorage.setItem(pendingKey,JSON.stringify({txHash,account,reviewStatus,reason}));
+   }
+   const endpoint='/api/v1/browser-transactions/verifications/'+encodeURIComponent(v.verification_id)+'/reviews/confirm';
+   for(let attempt=0;attempt<5;attempt++){
+    try{
+     const confirmed=await request(endpoint,{tx_hash:txHash,admin_address:account,review_status:reviewStatus,reason_code:null,reason_text:reason});
+     sessionStorage.removeItem(pendingKey);
+     return confirmed;
+    }catch(error){
+     if((error as {status?:number}).status!==409||attempt===4)throw error;
+     await new Promise<void>(resolve=>setTimeout(resolve,2500));
+    }
+   }
+   throw Error('관리자 거래 확인이 완료되지 않았습니다.');
+  }
+  const data:Record<string,unknown>={review_status:b.review_status,reason_code:null,reason_text:b.reason_text,nonce:crypto.randomUUID(),deadline:Math.floor(Date.now()/1000)+900};
   const signed=await signedMessage(config,'admin',account=>{data.signer_address=account;return reviewMessage(config.chain.chain_id!,config.chain.contract_address!,v.verification_id,v.verification_hash,data)});
   return request(path,{...data,signature:signed.signature});
  }
