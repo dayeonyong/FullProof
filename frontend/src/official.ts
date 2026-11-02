@@ -73,14 +73,19 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
  if(path==='/api/v1/demo/scenarios')return scenarios.map(s=>({...s,claim_text:lastCase?scenarioClaim(lastCase):s.claim_text}));
  if(path==='/api/v1/cases'&&!b){const rows=await request<Case[]>('/api/v1/frontend/cases');return rows}
  if(path==='/api/v1/cases'&&b){
-  const id=`FP-${b.scenario_id||'supported'}-${crypto.randomUUID().slice(0,8)}`;
   const config=await getConfig();
+  const casePendingKey='fullproof.sepolia.pendingCase';
+  const savedCaseId=config.chain.chain_id===11155111?sessionStorage.getItem(casePendingKey):null;
+  const id=savedCaseId||`FP-${b.scenario_id||'supported'}-${crypto.randomUUID().slice(0,8)}`;
+  if(config.chain.chain_id===11155111&&!savedCaseId)sessionStorage.setItem(casePendingKey,id);
   const record= config.chain.chain_id===11155111
    ? await createSepoliaDemoCase(id,String(b.title||''),config)
    : await request<{case_id:string}>('/api/v1/cases',{case_id:id,title:b.title});
   try{if(config.chain.chain_id===11155111)await createSepoliaDemoStep(id,config);
       else await request('/api/v1/cases/'+id+'/steps',{step_name:'통화 사실 확인',is_required:true})}catch(e){throw Error('사건은 생성되었지만 단계 생성 응답이 불명확합니다. 사건을 열어 단계 상태를 확인하세요. '+(e as Error).message)}
-  return getCase(record.case_id);
+  const finished=await getCase(record.case_id);
+  if(config.chain.chain_id===11155111)sessionStorage.removeItem(casePendingKey);
+  return finished;
  }
  let match=path.match(/^\/api\/v1\/cases\/([^/]+)$/);
  if(match){lastCase=await getCase(match[1]);return lastCase}
