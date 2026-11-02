@@ -227,7 +227,7 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
   const transport=async <T>(url:string,body?:unknown):Promise<T>=>{
    const job=await request<T>(url,body);
    if(config.chain.chain_id===11155111&&url.startsWith('/api/v1/verification-requests')&&job&&typeof job==='object'&&'request_state' in job&&job.request_state==='AWAITING_WALLET')
-    return completeSepoliaVerification(job as VerificationRequest,config) as Promise<T>;
+    return completeSepoliaVerification(job as VerificationRequest,config) as unknown as Promise<T>;
    return job;
   };
   return startVerification(transport,{claim:{case_id:c.case_id,claim_id:claim.claim_id,claim_version:claim.claim_version},proofs:proofs.map(content)});
