@@ -522,8 +522,17 @@ def confirm_browser_claim(case_id: str, body: BrowserClaimConfirmRequest):
     if (actual if isinstance(actual, str) else Web3.to_hex(actual)).lower() != expected.lower():
         raise HTTPException(409, "Claim calldata mismatch")
     events = contract.events.ClaimAnchored().process_receipt(receipt)
-    if not any(event["args"]["caseId"] == case_uint(case_id)
-               and event["args"]["stepId"] == body.step_id for event in events):
+    if not any(
+        event["args"]["caseId"] == case_uint(case_id)
+        and event["args"]["stepId"] == body.step_id
+        and Web3.to_hex(event["args"]["claimIdHash"]).lower() == claim_id_hash.lower()
+        and int(event["args"]["claimVersion"]) == body.claim_version
+        and Web3.to_hex(event["args"]["claimHash"]).lower() == claim_hash.lower()
+        and Web3.to_hex(event["args"]["authorIdHash"]).lower() == author_hash.lower()
+        and int(event["args"]["inputAt"]) == body.created_at
+        and event["args"]["recorder"].lower() == police.lower()
+        for event in events
+    ):
         raise HTTPException(409, "Matching ClaimAnchored event missing")
     tx_hash = Web3.to_hex(receipt.transactionHash)
     for existing in record.get("v11_claims", []):
