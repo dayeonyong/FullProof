@@ -158,7 +158,28 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
  if(path==='/api/v1/proofs/anchor'&&b){
   const draft=drafts.get(String(b.draft_id));if(!draft)throw Error('현재 화면에서 생성한 서명 초안이 없습니다. 저장된 증빙을 조회해 주세요.');
   const p=draft.proof,m=draft.typed_data.message;
-  return request(path,{case_id:p.case_id,step_id:p.step_id,proof_id:p.proof_id,proof_version:p.proof_version,proof_hash:p.proof_hash,occurred_at:Number(m.occurredAt),issued_at:Number(m.issuedAt),agency:m.agency,nonce:Number(m.nonce),deadline:Number(m.deadline),signature:b.signature});
+  const payload={case_id:p.case_id,step_id:p.step_id,proof_id:p.proof_id,proof_version:p.proof_version,proof_hash:p.proof_hash,occurred_at:Number(m.occurredAt),issued_at:Number(m.issuedAt),agency:m.agency,nonce:Number(m.nonce),deadline:Number(m.deadline),signature:b.signature};
+  const config=await getConfig();
+  if(config.chain.chain_id!==11155111)return request(path,payload);
+  if(!window.ethereum)throw Error('MetaMask가 필요합니다.');
+  const payer=await walletAccount('0xF28d8E3890918c9E2A21C3Ed5C59fb450c977494',11155111,config.chain.rpc_url);
+  const pendingKey='fullproof.sepolia.proof.'+p.case_id+'.'+p.proof_id+'.'+p.proof_version;
+  type PendingProof={tx_hash:string;payload:typeof payload};
+  let pending:PendingProof|null=null;
+  const stored=sessionStorage.getItem(pendingKey);
+  if(stored){try{pending=JSON.parse(stored) as PendingProof}catch{throw Error('Proof 거래 복구 기록을 읽을 수 없습니다.');}}
+  if(pending){
+   if(pending.payload.signature!==payload.signature)throw Error('기존 Proof 거래 처리 중입니다. 이전 서명 거래를 확인하세요.');
+  }else{
+   const prepared=await request<{from:string;to:string;data:string;gas:string;value:string}>('/api/v1/browser-transactions/proofs/prepare',{...payload,payer_address:payer});
+   if(prepared.from.toLowerCase()!==payer.toLowerCase()||prepared.to.toLowerCase()!==config.chain.contract_address?.toLowerCase())throw Error('Proof 지갑 또는 계약 주소 불일치');
+   const hash=await sendWalletContractTransaction(window.ethereum,prepared);
+   pending={tx_hash:hash,payload};
+   sessionStorage.setItem(pendingKey,JSON.stringify(pending));
+  }
+  const result=await request('/api/v1/browser-transactions/proofs/confirm',{...pending.payload,payer_address:payer,tx_hash:pending.tx_hash});
+  sessionStorage.removeItem(pendingKey);
+  return result;
  }
  match=path.match(/^\/api\/v1\/claims\/([^/]+)\/proof-mappings$/);
  if(match&&b){
