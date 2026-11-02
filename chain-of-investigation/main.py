@@ -553,6 +553,50 @@ def confirm_browser_claim(case_id: str, body: BrowserClaimConfirmRequest):
 
 
 
+
+class BrowserVerificationPrepareRequest(BaseModel):
+    recorder_address: str
+
+
+@app.post("/api/v1/browser-transactions/verifications/{verification_id}/prepare")
+def prepare_browser_verification(verification_id: str, body: BrowserVerificationPrepareRequest):
+    """Only a persisted backend-computed verdict can be anchored."""
+    from browser_tx import prepare_contract_transaction
+    from mentor_support import row_by_id, namespace
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    if not Web3.is_address(body.recorder_address):
+        raise HTTPException(422, "Invalid recorder")
+    recorder = Web3.to_checksum_address(body.recorder_address)
+    if not contract.functions.isVerificationRecorder(recorder).call():
+        raise HTTPException(403, "Registered verification recorder required")
+    row = row_by_id(verification_id)
+    if row["namespace"] != namespace(__import__(__name__)) or not row.get("result_json"):
+        raise HTTPException(409, "Verification result is unavailable on current chain")
+    result = json.loads(row["result_json"])
+    if row["state"] == "CONFIRMED" or result.get("verification_tx_hash"):
+        raise HTTPException(409, "Verification is already anchored")
+    if result.get("verification_id") != verification_id or result.get("processing_status") != "COMPLETED":
+        raise HTTPException(409, "Unfinalized verification")
+    verification_hash = validate_v11_verification_hashes(result)
+    claim = result["claim_ref"]
+    chain_case_id = case_uint(result["case_id"])
+    latest = contract.functions.getLatestClaim(chain_case_id, result["step_id"]).call()
+    if (Web3.to_hex(latest[0]).lower() != ("0x"+hashlib.sha256(claim["claim_id"].encode()).hexdigest()).lower()
+        or latest[1] != claim["claim_version"]
+        or Web3.to_hex(latest[2]).lower() != claim["claim_hash"].lower()):
+        raise HTTPException(409, "On-chain Claim has changed")
+    try:
+        fn = build_verification_anchor_function(result, verification_hash)
+        tx = prepare_contract_transaction(w3, fn, recorder)
+    except Exception as exc:
+        raise HTTPException(409, f"Verification preflight failed: {exc}")
+    return {"from": recorder, "to": tx["to"], "data": tx["data"],
+            "gas": hex(tx["gas"]), "value": hex(tx.get("value", 0))}
+
+
+
 def require_admin_transaction_wallet():
     """Prevent server-side admin writes from using an unlocked RPC account.
 
