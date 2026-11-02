@@ -14,6 +14,11 @@ describe('Backend-owned case list',()=>{
   expect(dashboard).not.toContain("api<Case>('/api/v1/cases',{");
   expect(official).toContain("request<Case[]>('/api/v1/frontend/cases')");
  });
+ it('has direct case creation without hardcoded mock cards',()=>{
+  expect(dashboard).toContain('새 사건 등록');
+  expect(dashboard).toContain("api<Case>('/api/v1/cases',{title:newCaseTitle.trim()");
+  expect(dashboard).toContain('setError(e instanceof Error?e.message');
+ });
  it('preserves MetaMask-backed creation code separately',()=>{
   expect(official).toContain('await createSepoliaDemoCase(id');
   expect(official).toContain('/api/v1/browser-transactions/cases/confirm');
