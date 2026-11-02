@@ -188,7 +188,7 @@ def case_view(record):
     return dict(c, verification_requests=requests, status='CLOSED' if c.get('is_closed') else 'OPEN', created_at=claims[0]['claim_created_at'] if claims else None,
                 scenario_id=next((s for s in ['contradicted','insufficient','ambiguous'] if s in cid),'supported'),
                 region='가상 지역',claims=claims,proofs=proofs,mappings=mappings,verifications=verifications,reviews=reviews,
-                close_eligible=eligible,close_blockers=blockers,close_tx_hash=hx(close.get('tx_hash')),closed_at=None)
+                close_eligible=eligible,close_blockers=blockers,close_tx_hash=hx(c.get('close_tx_hash') or close.get('tx_hash')),closed_at=None)
 
 
 @app.get('/api/v1/frontend/cases')
