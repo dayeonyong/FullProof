@@ -284,6 +284,7 @@ def confirm_browser_case_close(case_id: str, body: BrowserCloseConfirmation):
         raise HTTPException(409, "Case already closed with a different reason")
     record["is_closed"] = True
     record["close_reason"] = body.reason.strip()
+    record["close_tx_hash"] = Web3.to_hex(receipt.transactionHash)
     save_case(record)
     return {"status": "SUCCESS", "case_id": case_id, "chain_status": "CONFIRMED",
             "tx_hash": Web3.to_hex(receipt.transactionHash), "closed_by": admin,
