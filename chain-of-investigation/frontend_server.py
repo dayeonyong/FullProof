@@ -243,6 +243,77 @@ def recovered_demo_cases():
     return records
 
 
+# Team demo drafts are stored separately from confirmed Sepolia case records.
+# No wallet signature is requested by these endpoints.
+import uuid
+from pydantic import BaseModel, Field
+
+class TeamDraftCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+class TeamDraftText(BaseModel):
+    text: str = Field(min_length=1, max_length=10000)
+
+def _draft_conn():
+    conn = database.get_connection()
+    conn.execute("""CREATE TABLE IF NOT EXISTS team_drafts (
+        draft_id TEXT PRIMARY KEY, title TEXT NOT NULL,
+        claim_text TEXT NOT NULL DEFAULT '', proof_text TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+    return conn
+
+def _draft_view(row):
+    return dict(draft_id=row['draft_id'],title=row['title'],
+        claim_text=row['claim_text'],proof_text=row['proof_text'],
+        created_at=row['created_at'],updated_at=row['updated_at'],
+        status='DRAFT_NOT_ONCHAIN',is_onchain=False)
+
+@app.get('/api/v1/frontend/team-drafts')
+def list_team_drafts():
+    with _draft_conn() as conn:
+        rows=conn.execute('SELECT * FROM team_drafts ORDER BY created_at DESC').fetchall()
+    return [_draft_view(row) for row in rows]
+
+@app.post('/api/v1/frontend/team-drafts', status_code=201)
+def create_team_draft(body: TeamDraftCreate):
+    now=datetime.now(timezone.utc).isoformat()
+    item=('DEMO-'+uuid.uuid4().hex[:16],body.title.strip(),'','',now,now)
+    if not item[1]:
+        raise HTTPException(422, 'Title cannot be blank')
+    with _draft_conn() as conn:
+        conn.execute('INSERT INTO team_drafts (draft_id,title,claim_text,proof_text,created_at,updated_at) VALUES (?,?,?,?,?,?)',item)
+        row=conn.execute('SELECT * FROM team_drafts WHERE draft_id=?',(item[0],)).fetchone()
+    return _draft_view(row)
+
+@app.get('/api/v1/frontend/team-drafts/{draft_id}')
+def get_team_draft(draft_id: str):
+    with _draft_conn() as conn:
+        row=conn.execute('SELECT * FROM team_drafts WHERE draft_id=?',(draft_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404,'Draft not found')
+    return _draft_view(row)
+
+@app.post('/api/v1/frontend/team-drafts/{draft_id}/claim')
+def save_team_draft_claim(draft_id: str, body: TeamDraftText):
+    now=datetime.now(timezone.utc).isoformat()
+    with _draft_conn() as conn:
+        cur=conn.execute('UPDATE team_drafts SET claim_text=?,updated_at=? WHERE draft_id=?',(body.text,now,draft_id))
+        if not cur.rowcount:
+            raise HTTPException(404,'Draft not found')
+        row=conn.execute('SELECT * FROM team_drafts WHERE draft_id=?',(draft_id,)).fetchone()
+    return _draft_view(row)
+
+@app.post('/api/v1/frontend/team-drafts/{draft_id}/proof')
+def save_team_draft_proof(draft_id: str, body: TeamDraftText):
+    now=datetime.now(timezone.utc).isoformat()
+    with _draft_conn() as conn:
+        cur=conn.execute('UPDATE team_drafts SET proof_text=?,updated_at=? WHERE draft_id=?',(body.text,now,draft_id))
+        if not cur.rowcount:
+            raise HTTPException(404,'Draft not found')
+        row=conn.execute('SELECT * FROM team_drafts WHERE draft_id=?',(draft_id,)).fetchone()
+    return _draft_view(row)
+
+
 @app.get('/api/v1/frontend/cases')
 def frontend_cases():
     # Listing previously stored records must not depend on Sepolia RPC uptime.
