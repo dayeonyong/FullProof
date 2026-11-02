@@ -597,6 +597,62 @@ def prepare_browser_verification(verification_id: str, body: BrowserVerification
 
 
 
+
+class BrowserVerificationConfirmRequest(BrowserVerificationPrepareRequest):
+    tx_hash: str
+
+
+@app.post("/api/v1/browser-transactions/verifications/{verification_id}/confirm")
+def confirm_browser_verification(verification_id: str, body: BrowserVerificationConfirmRequest):
+    from mentor_support import row_by_id, update, namespace
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    if not Web3.is_address(body.recorder_address) or not Web3.is_hex(body.tx_hash) or len(body.tx_hash) != 66:
+        raise HTTPException(422, "Invalid recorder or transaction")
+    recorder = Web3.to_checksum_address(body.recorder_address)
+    row = row_by_id(verification_id)
+    if row["namespace"] != namespace(__import__("sys").modules[__name__]) or not row.get("result_json"):
+        raise HTTPException(409, "Verification result unavailable")
+    result = json.loads(row["result_json"])
+    if result.get("verification_id") != verification_id or result.get("processing_status") != "COMPLETED":
+        raise HTTPException(409, "Invalid staged verification")
+    verification_hash = validate_v11_verification_hashes(result)
+    expected = build_verification_anchor_function(result, verification_hash)._encode_transaction_data()
+    try:
+        receipt = w3.eth.get_transaction_receipt(body.tx_hash)
+        transaction = w3.eth.get_transaction(body.tx_hash)
+    except Exception:
+        raise HTTPException(409, "Verification transaction pending")
+    actual = transaction["input"]
+    actual = actual if isinstance(actual, str) else Web3.to_hex(actual)
+    if (receipt.status != 1 or not receipt.to
+        or receipt.to.lower() != contract.address.lower()
+        or transaction["from"].lower() != recorder.lower()
+        or actual.lower() != expected.lower()):
+        raise HTTPException(409, "Verification transaction mismatch")
+    hashed_id = "0x" + hashlib.sha256(verification_id.encode()).hexdigest()
+    events = contract.events.VerificationAnchored().process_receipt(receipt)
+    verdicts = {"SUPPORTED": 1, "CONTRADICTED": 2, "INSUFFICIENT": 3}
+    if not any(e["args"]["caseId"] == case_uint(result["case_id"])
+               and e["args"]["stepId"] == result["step_id"]
+               and Web3.to_hex(e["args"]["verificationIdHash"]).lower() == hashed_id.lower()
+               and Web3.to_hex(e["args"]["verificationHash"]).lower() == verification_hash.lower()
+               and int(e["args"]["verdict"]) == verdicts[result["verdict"]]
+               and e["args"]["recorder"].lower() == recorder.lower() for e in events):
+        raise HTTPException(409, "VerificationAnchored event mismatch")
+    tx_hash = Web3.to_hex(receipt.transactionHash)
+    if row["state"] == "CONFIRMED":
+        if row.get("tx_hash", "").lower() != tx_hash.lower():
+            raise HTTPException(409, "Another verification transaction already confirmed")
+        return result
+    result["verification_tx_hash"] = tx_hash
+    result["verification_hash"] = verification_hash
+    update(verification_id, state="CONFIRMED", phase="CONFIRMED", result_json=json.dumps(result, ensure_ascii=False), tx_hash=tx_hash)
+    return result
+
+
+
 def require_admin_transaction_wallet():
     """Prevent server-side admin writes from using an unlocked RPC account.
 
