@@ -137,6 +137,10 @@ def case_view(record):
         m['evidence_note'] = (m.get('confirmation_evidence') or {}).get('note', '')
     verifications = [deepcopy(v) for v in list(core.V11_VERIFICATION_RESULTS.values()) if v.get('case_id')==cid]
     reviews = [dict(v, chain_status=receipt_status(v.get('review_tx_hash'))) for path,v in audit_rows() if path.endswith('/reviews') and v.get('case_id')==cid]
+    # Browser-signed Sepolia review receipts are stored independently of legacy audit rows.
+    for review in core.load_v11_store("browser_review_receipts").values():
+        if review.get("case_id") == cid and not any(v.get("review_tx_hash") == review.get("review_tx_hash") for v in reviews):
+            reviews.append(deepcopy(review))
     # Recover chain review existence even when created by another client.
     for v in verifications:
         tx = v.get('verification_tx_hash')
