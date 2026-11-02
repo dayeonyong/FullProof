@@ -94,14 +94,8 @@ def public_config():
     # Readiness reflects transaction capability, not just RPC connectivity.
     server_transactions_ready = available
     if available and core.w3.eth.chain_id == 11155111:
-        try:
-            server_wallet = core.get_server_address()
-            server_transactions_ready = (
-                core.contract.functions.isPolice(server_wallet).call()
-                and core.contract.functions.isVerificationRecorder(server_wallet).call()
-            )
-        except Exception:
-            server_transactions_ready = False
+        # Server-funded writes are deliberately disabled without real authentication.
+        server_transactions_ready = False
     return {'schema_version':'1.1', 'environment':'LOCAL_OFFICIAL_INTEGRATION', 'chain':chain,
             'ai':{'provider':'fixture' if FIXTURE else 'Gemini', 'is_simulated':FIXTURE,
                   'key_configured':bool(os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY'))},
