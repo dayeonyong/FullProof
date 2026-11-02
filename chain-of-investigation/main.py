@@ -370,6 +370,75 @@ def confirm_browser_case_creation(body: BrowserCaseConfirmRequest):
 
 
 
+
+class BrowserStepRequest(BaseModel):
+    police_address: str
+    step_name: str
+    is_required: bool = True
+
+
+@app.post("/api/v1/browser-transactions/cases/{case_id}/steps/prepare")
+def prepare_browser_step(case_id: str, body: BrowserStepRequest):
+    from browser_tx import prepare_contract_transaction
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    record = cases_db.get(case_id)
+    if record is None or record["is_closed"]:
+        raise HTTPException(409, "Open case required")
+    if not body.step_name.strip() or not Web3.is_address(body.police_address):
+        raise HTTPException(422, "Valid step and wallet required")
+    police = Web3.to_checksum_address(body.police_address)
+    if not contract.functions.isPolice(police).call():
+        raise HTTPException(403, "Police account required")
+    try:
+        tx = prepare_contract_transaction(w3, contract.functions.addStep(case_uint(case_id), body.step_name, body.is_required), police)
+    except Exception as exc:
+        raise HTTPException(409, f"Step preflight failed: {exc}")
+    return {"from": police, "to": tx["to"], "data": tx["data"],
+            "gas": hex(tx["gas"]), "value": hex(tx.get("value", 0))}
+
+
+@app.post("/api/v1/browser-transactions/cases/{case_id}/steps/confirm")
+def confirm_browser_step(case_id: str, body: BrowserStepRequest, tx_hash: str):
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    record = cases_db.get(case_id)
+    if record is None or record["is_closed"]:
+        raise HTTPException(409, "Open case required")
+    if not Web3.is_address(body.police_address) or len(tx_hash) != 66 or not Web3.is_hex(tx_hash):
+        raise HTTPException(422, "Invalid wallet or transaction")
+    police = Web3.to_checksum_address(body.police_address)
+    try:
+        receipt = w3.eth.get_transaction_receipt(tx_hash)
+        transaction = w3.eth.get_transaction(tx_hash)
+    except Exception:
+        raise HTTPException(409, "Transaction pending")
+    if receipt.status != 1 or not receipt.to or receipt.to.lower() != contract.address.lower() or transaction["from"].lower() != police.lower():
+        raise HTTPException(409, "Transaction mismatch")
+    expected = contract.functions.addStep(case_uint(case_id), body.step_name, body.is_required)._encode_transaction_data()
+    actual = transaction["input"]
+    if (actual if isinstance(actual, str) else Web3.to_hex(actual)).lower() != expected.lower():
+        raise HTTPException(409, "Step calldata mismatch")
+    events = contract.events.StepAdded().process_receipt(receipt)
+    matches = [e for e in events if e["args"]["caseId"] == case_uint(case_id)
+               and e["args"]["stepName"] == body.step_name and e["args"]["isRequired"] == body.is_required]
+    if len(matches) != 1:
+        raise HTTPException(409, "StepAdded event missing")
+    index = int(matches[0]["args"]["stepId"])
+    if index < len(record["steps"]):
+        if record["steps"][index]["step_name"] != body.step_name:
+            raise HTTPException(409, "Existing step differs")
+        return record
+    if index != len(record["steps"]):
+        raise HTTPException(409, "Earlier step not reconciled")
+    record["steps"].append({"step_id": index, "step_name": body.step_name, "is_required": body.is_required})
+    record["step_count"] = len(record["steps"])
+    save_case(record)
+    return record
+
+
 def require_admin_transaction_wallet():
     """Prevent server-side admin writes from using an unlocked RPC account.
 
