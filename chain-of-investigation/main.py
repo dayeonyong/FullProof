@@ -1870,6 +1870,61 @@ def prepare_browser_proof(data: BrowserProofPrepareRequest):
 
 
 
+
+class BrowserProofConfirmRequest(BrowserProofPrepareRequest):
+    tx_hash: str
+
+
+@app.post("/api/v1/browser-transactions/proofs/confirm")
+def confirm_browser_proof(data: BrowserProofConfirmRequest):
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    if not Web3.is_address(data.payer_address) or not Web3.is_address(data.agency):
+        raise HTTPException(422, "Invalid wallet")
+    if len(data.tx_hash) != 66 or not Web3.is_hex(data.tx_hash):
+        raise HTTPException(422, "Invalid transaction")
+    proof_id_hash = "0x" + hashlib.sha256(data.proof_id.encode()).hexdigest()
+    agency = Web3.to_checksum_address(data.agency)
+    attestation = (case_uint(data.case_id), data.step_id, proof_id_hash,
+                   data.proof_version, data.proof_hash, data.occurred_at,
+                   data.issued_at, agency, data.nonce, data.deadline)
+    expected_input = contract.functions.anchorProofAttestation(attestation, data.signature)._encode_transaction_data()
+    try:
+        receipt = w3.eth.get_transaction_receipt(data.tx_hash)
+        transaction = w3.eth.get_transaction(data.tx_hash)
+    except Exception:
+        raise HTTPException(409, "Proof transaction pending")
+    actual = transaction["input"]
+    actual = actual if isinstance(actual, str) else Web3.to_hex(actual)
+    if (receipt.status != 1 or not receipt.to
+        or receipt.to.lower() != contract.address.lower()
+        or transaction["from"].lower() != data.payer_address.lower()
+        or actual.lower() != expected_input.lower()):
+        raise HTTPException(409, "Proof transaction mismatch")
+    events = contract.events.AgencyProofAnchored().process_receipt(receipt)
+    if not any(e["args"]["caseId"] == case_uint(data.case_id)
+               and e["args"]["stepId"] == data.step_id
+               and Web3.to_hex(e["args"]["proofIdHash"]).lower() == proof_id_hash.lower()
+               and e["args"]["proofVersion"] == data.proof_version
+               and Web3.to_hex(e["args"]["proofHash"]).lower() == data.proof_hash.lower()
+               and e["args"]["agency"].lower() == agency.lower()
+               and e["args"]["occurredAt"] == data.occurred_at
+               and e["args"]["issuedAt"] == data.issued_at for e in events):
+        raise HTTPException(409, "AgencyProofAnchored event mismatch")
+    draft = PROOF_DRAFTS.get((data.case_id, data.proof_id, data.proof_version))
+    if not draft or v11_proof_hash(draft["proof_content"]) != data.proof_hash:
+        raise HTTPException(409, "Matching Proof draft unavailable")
+    draft["status"] = "ANCHORED"
+    save_v11_store("proof_drafts", PROOF_DRAFTS)
+    return {"schema_version": "1.1", "case_id": data.case_id,
+            "step_id": data.step_id, "proof_id": data.proof_id,
+            "proof_id_hash": proof_id_hash, "proof_hash": data.proof_hash,
+            "agency": agency, "proof_tx_hash": Web3.to_hex(receipt.transactionHash),
+            "chain_status": "CONFIRMED"}
+
+
+
 @app.get("/api/v1/cases/{case_id}/steps/{step_id}/agency-proofs")
 def get_agency_proof_history(case_id: str, step_id: int):
     require_chain()
