@@ -42,9 +42,18 @@ async function createSepoliaDemoCase(id:string,title:string,config:System):Promi
   txHash=await sendWalletContractTransaction(window.ethereum,prepared);
   sessionStorage.setItem(pendingKey,txHash);
  }
- const record=await request<{case_id:string}>('/api/v1/browser-transactions/cases/confirm',{case_id:id,title,police_address:account,tx_hash:txHash});
- sessionStorage.removeItem(pendingKey);
- return record;
+ const confirmPath='/api/v1/browser-transactions/cases/confirm';
+ for(let attempt=0;attempt<5;attempt++){
+  try{
+   const record=await request<{case_id:string}>(confirmPath,{case_id:id,title,police_address:account,tx_hash:txHash});
+   sessionStorage.removeItem(pendingKey);
+   return record;
+  }catch(error){
+   if((error as {status?:number}).status!==409||attempt===4)throw error;
+   await new Promise<void>(resolve=>setTimeout(resolve,2500));
+  }
+ }
+ throw Error('사건 거래 확인이 완료되지 않았습니다. 동일한 사건으로 재확인해 주세요.');
 }
 
 async function createSepoliaDemoStep(id:string,config:System):Promise<void>{
