@@ -3333,6 +3333,97 @@ def get_v11_verification_request(verification_id: str):
     return v11_success(request_status(verification_id,current_core()))
 
 
+class BrowserVerificationRequest(BaseModel):
+    recorder_address: str
+
+
+class BrowserVerificationConfirmation(BrowserVerificationRequest):
+    tx_hash: str
+
+
+def staged_browser_verification(verification_id):
+    from mentor_support import row_by_id
+    row = row_by_id(verification_id)
+    if row["state"] not in ("AWAITING_WALLET", "CONFIRMED") or not row.get("result_json"):
+        raise HTTPException(409, "Verification result is not ready for wallet")
+    result = json.loads(row["result_json"])
+    if result.get("verification_id") != verification_id:
+        raise HTTPException(409, "Verification ID mismatch")
+    if result.get("verdict") not in ("SUPPORTED", "CONTRADICTED", "INSUFFICIENT"):
+        raise HTTPException(409, "Invalid completed verdict")
+    hash_value = validate_v11_verification_hashes(result)
+    if result.get("verification_hash") != hash_value:
+        raise HTTPException(409, "Verification hash mismatch")
+    return row, result, hash_value
+
+
+@app.post("/api/v1/browser-transactions/verifications/{verification_id}/prepare")
+def prepare_browser_verification(verification_id: str, body: BrowserVerificationRequest):
+    from browser_tx import prepare_contract_transaction
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    row, result, hash_value = staged_browser_verification(verification_id)
+    if row["state"] != "AWAITING_WALLET":
+        raise HTTPException(409, "Verification already anchored")
+    if not Web3.is_address(body.recorder_address):
+        raise HTTPException(422, "Recorder wallet invalid")
+    recorder = Web3.to_checksum_address(body.recorder_address)
+    if not contract.functions.isVerificationRecorder(recorder).call():
+        raise HTTPException(403, "Authorized recorder wallet required")
+    try:
+        tx = prepare_contract_transaction(w3, build_verification_anchor_function(result, hash_value), recorder)
+    except Exception as exc:
+        raise HTTPException(409, f"Verification preflight failed: {exc}")
+    return {"from": recorder, "to": tx["to"], "data": tx["data"],
+            "gas": hex(tx["gas"]), "value": hex(tx.get("value", 0))}
+
+
+@app.post("/api/v1/browser-transactions/verifications/{verification_id}/confirm")
+def confirm_browser_verification(verification_id: str, body: BrowserVerificationConfirmation):
+    from mentor_support import update, persist_result, row_by_id
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    row, result, hash_value = staged_browser_verification(verification_id)
+    if not Web3.is_address(body.recorder_address) or len(body.tx_hash) != 66 or not Web3.is_hex(body.tx_hash):
+        raise HTTPException(422, "Invalid recorder or transaction")
+    recorder = Web3.to_checksum_address(body.recorder_address)
+    try:
+        receipt = w3.eth.get_transaction_receipt(body.tx_hash)
+        txn = w3.eth.get_transaction(body.tx_hash)
+    except Exception:
+        raise HTTPException(409, "Verification transaction pending")
+    function = build_verification_anchor_function(result, hash_value)
+    actual = txn["input"] if isinstance(txn["input"], str) else Web3.to_hex(txn["input"])
+    if (receipt.status != 1 or not receipt.to
+        or receipt.to.lower() != contract.address.lower()
+        or txn["from"].lower() != recorder.lower()
+        or actual.lower() != function._encode_transaction_data().lower()):
+        raise HTTPException(409, "Verification transaction mismatch")
+    expected_id = "0x" + hashlib.sha256(verification_id.encode("utf-8")).hexdigest()
+    verdict = {"SUPPORTED": 1, "CONTRADICTED": 2, "INSUFFICIENT": 3}[result["verdict"]]
+    events = contract.events.VerificationAnchored().process_receipt(receipt)
+    if not any(e["args"]["caseId"] == case_uint(result["case_id"])
+               and e["args"]["stepId"] == result["step_id"]
+               and Web3.to_hex(e["args"]["verificationIdHash"]).lower() == expected_id.lower()
+               and Web3.to_hex(e["args"]["verificationHash"]).lower() == hash_value.lower()
+               and int(e["args"]["verdict"]) == verdict
+               and e["args"]["recorder"].lower() == recorder.lower()
+               for e in events):
+        raise HTTPException(409, "VerificationAnchored event mismatch")
+    tx_hash = Web3.to_hex(receipt.transactionHash)
+    if row["state"] == "CONFIRMED":
+        if (row.get("tx_hash") or "").lower() != tx_hash.lower():
+            raise HTTPException(409, "Verification already confirmed with different transaction")
+        return result
+    result["verification_tx_hash"] = tx_hash
+    persist_result(__import__(__name__), result)
+    update(verification_id, state="CONFIRMED", phase="COMPLETED",
+           result_json=json.dumps(result, ensure_ascii=False), tx_hash=tx_hash, error=None)
+    return result
+
+
 @app.get("/api/v1/verifications/{verification_id}/integrity-data")
 def get_v11_integrity_data(verification_id: str):
     from mentor_support import integrity_data
