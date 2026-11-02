@@ -179,6 +179,8 @@ def verification_sender():
 
 def submit_contract_transaction(contract_function, role="sender"):
     """Submit using the signer appropriate for the current network."""
+    from public_write_guard import require_public_write_authorization
+    require_public_write_authorization(w3.eth.chain_id, os.environ)
     if role == "verification":
         verification_sender()
     else:
