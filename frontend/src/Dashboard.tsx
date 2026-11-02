@@ -31,6 +31,10 @@ export default function Dashboard(){
   if(system?.chain.chain_id===11155111&&!window.ethereum){setError('Sepolia 사건 등록에는 MetaMask가 필요합니다. 보안 경고가 해결되기 전에는 거래를 승인하지 마세요.');return}
   setCreating(true);setError('');
   try{
+   if(system?.chain.chain_id===11155111){
+    const preflight=await api<{ready:boolean;police_registered?:boolean;verification_recorder_registered?:boolean;reason?:string}>('/api/v1/frontend/sepolia-preflight');
+    if(!preflight.ready)throw Error('Sepolia 사전 점검 실패: '+(preflight.reason||'수사담당자 또는 검증 기록자 권한을 확인해 주세요.')+' MetaMask 거래는 실행하지 않았습니다.');
+   }
    const created=await api<Case>('/api/v1/cases',{title:newCaseTitle.trim(),scenario_id:'supported'});
    await refresh();
    navigate(caseLink(role,created.case_id));
