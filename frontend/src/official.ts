@@ -103,7 +103,7 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
    let pending:{txHash:string;account:string;reviewStatus:string;reason:string}|null=null;
    const stored=sessionStorage.getItem(pendingKey);
    if(stored){
-    try{pending=JSON.parse(stored) as typeof pending}
+    try{pending=JSON.parse(stored) as {txHash:string;account:string;reviewStatus:string;reason:string}}
     catch{throw Error('이전 관리자 검토 기록을 읽지 못했습니다. 거래 기록을 확인해 주세요.')}
    }
    if(pending&&(pending.account.toLowerCase()!==account.toLowerCase()||pending.reviewStatus!==reviewStatus||pending.reason!==reason))
