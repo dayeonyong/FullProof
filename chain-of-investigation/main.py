@@ -399,20 +399,24 @@ def prepare_browser_step(case_id: str, body: BrowserStepRequest):
             "gas": hex(tx["gas"]), "value": hex(tx.get("value", 0))}
 
 
+class BrowserStepConfirmation(BrowserStepRequest):
+    tx_hash: str
+
+
 @app.post("/api/v1/browser-transactions/cases/{case_id}/steps/confirm")
-def confirm_browser_step(case_id: str, body: BrowserStepRequest, tx_hash: str):
+def confirm_browser_step(case_id: str, body: BrowserStepConfirmation):
     require_chain()
     if w3.eth.chain_id != 11155111:
         raise HTTPException(409, "Sepolia required")
     record = cases_db.get(case_id)
     if record is None or record["is_closed"]:
         raise HTTPException(409, "Open case required")
-    if not Web3.is_address(body.police_address) or len(tx_hash) != 66 or not Web3.is_hex(tx_hash):
+    if not Web3.is_address(body.police_address) or len(body.tx_hash) != 66 or not Web3.is_hex(body.tx_hash):
         raise HTTPException(422, "Invalid wallet or transaction")
     police = Web3.to_checksum_address(body.police_address)
     try:
-        receipt = w3.eth.get_transaction_receipt(tx_hash)
-        transaction = w3.eth.get_transaction(tx_hash)
+        receipt = w3.eth.get_transaction_receipt(body.tx_hash)
+        transaction = w3.eth.get_transaction(body.tx_hash)
     except Exception:
         raise HTTPException(409, "Transaction pending")
     if receipt.status != 1 or not receipt.to or receipt.to.lower() != contract.address.lower() or transaction["from"].lower() != police.lower():
@@ -433,7 +437,10 @@ def confirm_browser_step(case_id: str, body: BrowserStepRequest, tx_hash: str):
         return record
     if index != len(record["steps"]):
         raise HTTPException(409, "Earlier step not reconciled")
-    record["steps"].append({"step_id": index, "step_name": body.step_name, "is_required": body.is_required})
+    record["steps"].append({"step_id": index, "step_name": body.step_name, "is_required": body.is_required,
+                             "claim_hash": "0x" + "00" * 32, "proof_hash": "0x" + "00" * 32,
+                             "status": "PENDING", "is_completed": False,
+                             "tx_hash": Web3.to_hex(receipt.transactionHash)})
     record["step_count"] = len(record["steps"])
     save_case(record)
     return record
