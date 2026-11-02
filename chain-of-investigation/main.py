@@ -186,6 +186,34 @@ def submit_contract_transaction(contract_function, role="sender"):
     return submit_transaction(w3, contract_function, role=role)
 
 
+class BrowserAdminTransactionRequest(BaseModel):
+    admin_address: str
+
+
+@app.post("/api/v1/browser-transactions/cases/{case_id}/close/prepare")
+def prepare_browser_case_close(case_id: str, body: BrowserAdminTransactionRequest):
+    """Unsigned Sepolia closure transaction; MetaMask must sign and broadcast.
+
+    This endpoint does not close the case or trust browser-reported status.
+    """
+    from browser_tx import BrowserTransactionError, prepare_contract_transaction
+
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Browser signing is available on Sepolia only")
+    if not Web3.is_address(body.admin_address):
+        raise HTTPException(422, "Invalid administrator address")
+    admin = Web3.to_checksum_address(body.admin_address)
+    if admin.lower() != contract.functions.admin().call().lower():
+        raise HTTPException(403, "Wallet is not the on-chain administrator")
+    record = cases_db.get(case_id)
+    if record is None:
+        raise HTTPException(404, "Case not found")
+    if record["is_closed"]:
+        raise HTTPException(409, "Case already closed")
+    raise HTTPException(422, "Closure reason must be supplied with a signed admin request")
+
+
 def require_admin_transaction_wallet():
     """Prevent server-side admin writes from using an unlocked RPC account.
 
