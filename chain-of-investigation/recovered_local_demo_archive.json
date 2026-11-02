@@ -1,0 +1,132 @@
+[
+  {
+    "case_id": "FP-supported-b147190c",
+    "title": "가상 실종 사건 · 정상",
+    "source": "RECOVERED_LOCAL_SQLITE_DEMO",
+    "network": "LOCAL_HARDHAT_UNVERIFIED",
+    "read_only": true,
+    "steps": [
+      {
+        "step_id": 0,
+        "step_name": "통화 사실 확인",
+        "status": "PENDING"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "CL-71b0d64f-6941-4521-a85a-51fd4b032edf",
+        "claim_text": "2026년 10월 18일 14시에 P001과 통화에 성공했다. CALL_REF[DEMO-TEL:CALL-FP-supported-b147190c]",
+        "claim_hash": "0x434eaa2671526c59ed4d87bd1cd51d0d722a1d354d69a84e5c762c54220c77d7",
+        "claim_created_at": "2026-10-29T02:33:05Z",
+        "extraction_status": "COMPLETED",
+        "action_result": "SUCCESS"
+      }
+    ],
+    "proofs": [],
+    "verifications": []
+  },
+  {
+    "case_id": "FP-contradicted-79557e6c",
+    "title": "가상 실종 사건 · 불일치",
+    "source": "RECOVERED_LOCAL_SQLITE_DEMO",
+    "network": "LOCAL_HARDHAT_UNVERIFIED",
+    "read_only": true,
+    "steps": [
+      {
+        "step_id": 0,
+        "step_name": "통화 사실 확인",
+        "status": "PENDING"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "CL-dbf1d614-6265-4bd9-8015-5c36e1b99e96",
+        "claim_text": "2026년 10월 18일 14시에 P001과 통화에 성공했다. CALL_REF[DEMO-TEL:CALL-FP-contradicted-79557e6c]",
+        "claim_hash": "0x0120e672223a5c330c266eb1c50dd36cbbee1432056ef51d533cc0d5e18bf2d2",
+        "claim_created_at": "2026-10-29T05:00:18Z",
+        "extraction_status": "COMPLETED",
+        "action_result": "SUCCESS"
+      }
+    ],
+    "proofs": [],
+    "verifications": []
+  },
+  {
+    "case_id": "FP-supported-669721db",
+    "title": "가상 실종 사건 · 정상",
+    "source": "RECOVERED_LOCAL_SQLITE_DEMO",
+    "network": "LOCAL_HARDHAT_UNVERIFIED",
+    "read_only": true,
+    "steps": [
+      {
+        "step_id": 0,
+        "step_name": "통화 사실 확인",
+        "status": "PENDING"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "CL-492db95f-1b5e-4b63-9ceb-4eae073ec07e",
+        "claim_text": "2026년 10월 18일 14시에 P001과 통화에 성공했다. CALL_REF[DEMO-TEL:CALL-FP-supported-669721db]",
+        "claim_hash": "0x33c43f237306f2a331f9e25cd709a27b6eb8a103b8364afb88c0838ddad65ef3",
+        "claim_created_at": "2026-10-25T08:40:50Z",
+        "extraction_status": "COMPLETED",
+        "action_result": "SUCCESS"
+      }
+    ],
+    "proofs": [],
+    "verifications": []
+  },
+  {
+    "case_id": "FP-supported-31d2afff",
+    "title": "가상 실종 사건 · 정상 일치",
+    "source": "RECOVERED_LOCAL_SQLITE_DEMO",
+    "network": "LOCAL_HARDHAT_UNVERIFIED",
+    "read_only": true,
+    "steps": [
+      {
+        "step_id": 0,
+        "step_name": "통화 사실 확인",
+        "status": "PENDING"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "CL-5eea3174-5678-48ef-9f27-3696ff6cfc78",
+        "claim_text": "2026년 10월 18일 14시에 P001과 통화에 성공했다. CALL_REF[DEMO-TEL:CALL-FP-supported-31d2afff]",
+        "claim_hash": "0x28494d7d64226e902ddeae91d7d3ff90751d9c52bc5acef5ef0e52080266fa8a",
+        "claim_created_at": "2026-10-31T05:10:36Z",
+        "extraction_status": "FAILED",
+        "action_result": null
+      }
+    ],
+    "proofs": [],
+    "verifications": []
+  },
+  {
+    "case_id": "FP-supported-d21f1d08",
+    "title": "가상 실종 사건 · 정상 일치",
+    "source": "RECOVERED_LOCAL_SQLITE_DEMO",
+    "network": "LOCAL_HARDHAT_UNVERIFIED",
+    "read_only": true,
+    "steps": [
+      {
+        "step_id": 0,
+        "step_name": "통화 사실 확인",
+        "status": "PENDING"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "CL-bbe914df-1c4b-46e4-8014-db0bd31e407e",
+        "claim_text": "2026년 10월 18일 14시에 P001과 통화에 성공했다. CALL_REF[DEMO-TEL:CALL-FP-supported-d21f1d08]",
+        "claim_hash": "0x3fff410d6dbd2822d3324da39297dca572849465576f3aa5e7b8373ccf11f799",
+        "claim_created_at": "2026-10-31T06:01:47Z",
+        "extraction_status": "COMPLETED",
+        "action_result": "SUCCESS"
+      }
+    ],
+    "proofs": [],
+    "verifications": []
+  }
+]
