@@ -1,0 +1,36 @@
+name: FullProof signing branch checks
+
+on:
+  push:
+    branches: [feature/sepolia-signing-assistant]
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- walletTransaction closureRecovery
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chain-of-investigation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install web3 eth-account
+      - run: python -m unittest test_browser_tx.py test_browser_admin_prepare.py test_browser_close_integration.py test_close_tx_persistence.py -v
