@@ -8,12 +8,32 @@ import {startVerification} from './verificationRequests';
 const base=import.meta.env.VITE_API_BASE_URL||'/backend';
 export async function request<T>(path:string,body?:unknown):Promise<T>{
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),150000);
+ const method=body===undefined?'GET':'POST';
  try{
-  const res=await fetch(base+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal});
-  let out;try{out=await res.json()}catch{throw Error('서버 응답을 읽을 수 없습니다. 기존 기록을 조회해 주세요.')}
-  if(!res.ok||out.success===false){const detail=out.error?.message||out.detail||'API 요청 실패';throw Object.assign(Error(typeof detail==='string'?detail:JSON.stringify(detail)),{status:res.status,code:out.error?.code||'OFFICIAL_API_ERROR'})}
-  return (out.success===true?out.data:out) as T;
- }catch(e){if((e as {status?:number}).status)throw e;throw Object.assign(Error(body?'응답 상태가 불명확합니다. 재전송 전에 상태 새로고침으로 기존 기록을 확인하세요.':'백엔드 연결을 확인해 주세요. frontend_server:app 및 Vite 프록시가 필요합니다.'),{code:body?'CONNECTION_UNKNOWN':'CONNECTION_ERROR',status:0})}finally{clearTimeout(timeout)}
+  const res=await fetch(base+path,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal});
+  const contentType=res.headers.get('content-type')||'';
+  let out:unknown;
+  try{
+   const responseText=await res.text();
+   if(!contentType.includes('json'))throw Error('INVALID_CONTENT_TYPE');
+   out=JSON.parse(responseText);
+  }catch{
+   throw Object.assign(Error(`백엔드가 JSON 응답을 보내지 않았습니다 (HTTP ${res.status}). Render 서버 상태와 Vercel /backend 프록시를 확인해 주세요.`),{status:res.status||502,code:'INVALID_BACKEND_RESPONSE'});
+  }
+  const data=out as {success?:boolean;data?:unknown;error?:{message?:string;code?:string};detail?:unknown};
+  if(!res.ok||data.success===false){
+   const detail=data.error?.message||data.detail||'API 요청 실패';
+   throw Object.assign(Error(`HTTP ${res.status}: ${typeof detail==='string'?detail:JSON.stringify(detail)}`),{status:res.status||502,code:data.error?.code||'OFFICIAL_API_ERROR'});
+  }
+  return (data.success===true?data.data:data) as T;
+ }catch(e){
+  if((e as {status?:number}).status)throw e;
+  const message=e instanceof Error?e.message:'알 수 없는 네트워크 오류';
+  if(e instanceof Error&&e.name==='AbortError')throw Object.assign(Error('백엔드 응답 시간이 초과됐습니다. Render 서비스 상태를 확인해 주세요.'),{code:'BACKEND_TIMEOUT',status:0});
+  throw Object.assign(Error(method==='POST'
+   ?'서버 응답을 확인하지 못했습니다. 중복 거래 방지를 위해 재전송 전에 기존 기록을 조회하세요. ('+message+')'
+   :'백엔드 연결에 실패했습니다. Render 서비스 상태와 Vercel /backend 연결을 확인해 주세요. ('+message+')'),{code:method==='POST'?'CONNECTION_UNKNOWN':'CONNECTION_ERROR',status:0});
+ }finally{clearTimeout(timeout)}
 }
 const getCase=(id:string)=>request<Case>('/api/v1/frontend/cases/'+encodeURIComponent(id));
 async function getConfig():Promise<System>{
