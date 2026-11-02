@@ -8,6 +8,11 @@ describe('Sepolia case selection',()=>{
   expect(dashboard).toContain('[fresh,setFresh]=useState(true)');
   expect(dashboard).toContain('if(existing&&!fresh)');
  });
+ it('does not silently disable case launch while loading cases',()=>{
+  expect(dashboard).not.toContain('disabled={opening||loading||(!isMockMode()&&!system?.chain.available)}');
+  expect(dashboard).toContain('disabled={opening||(!isMockMode()&&!system?.chain.available)}');
+  expect(dashboard).not.toContain("await refresh()}finally{setOpening(false)");
+ });
  it('requires MetaMask for new Sepolia case transactions',()=>{
   expect(dashboard).toContain('system?.chain.chain_id===11155111&&!window.ethereum');
   expect(official).toContain('await createSepoliaDemoCase(id');
