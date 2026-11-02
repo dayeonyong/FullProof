@@ -4,7 +4,7 @@ type Transport=<T>(path:string,body?:unknown)=>Promise<T>;
 export interface VerificationInput {claim:{case_id:string;claim_id:string;claim_version:number};proofs:Record<string,unknown>[]}
 const prefix='fullproof.verification.pending.v2:';
 const key=(input:VerificationInput)=>prefix+JSON.stringify(input.claim);
-const knownStates=['PROCESSING','SUBMITTED','CONFIRMED','FAILED','UNKNOWN'];
+const knownStates=['PROCESSING','SUBMITTED','AWAITING_WALLET','CONFIRMED','FAILED','UNKNOWN'];
 export function publishRequest(job:VerificationRequest){window.dispatchEvent(new CustomEvent('fullproof:verification-request',{detail:job}))}
 function validate(job:VerificationRequest){
  if(!job?.verification_id||!job.case_id||!knownStates.includes(job.request_state))throw Object.assign(Error('검증 요청 응답 형식을 확인할 수 없습니다. 사건의 검증 이력을 조회하세요.'),{code:'REQUEST_SCHEMA_ERROR'});
