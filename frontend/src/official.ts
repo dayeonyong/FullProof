@@ -18,7 +18,7 @@ const getCase=(id:string)=>request<Case>('/api/v1/frontend/cases/'+encodeURIComp
 async function getConfig():Promise<System>{
  const value=await request<System>('/api/v1/frontend/status');
  if(!value.chain||!value.ai||!value.capabilities)throw Error('frontend/status 응답 구조가 화면 규격과 다릅니다. 공식 백엔드 버전을 확인해 주세요.');
- return {...value,chain:{...value.chain,rpc_url:import.meta.env.VITE_PUBLIC_RPC_URL||window.location.origin+'/rpc'}};
+ return {...value,chain:{...value.chain,rpc_url:import.meta.env.VITE_PUBLIC_RPC_URL||value.chain.rpc_url||window.location.origin+'/rpc'}};
 }
 const time='2026-10-18T05:00:00Z';
 export const scenarios:Scenario[]=['supported','contradicted','insufficient','ambiguous'].map(id=>({id,title:({supported:'정상 일치',contradicted:'결과 불일치',insufficient:'증빙 부족',ambiguous:'연결 근거 부족'} as Record<string,string>)[id],note:'가상 통신사 자료',claim_text:'2026년 10월 18일 14시에 P001과 통화에 성공했다.',result:id==='insufficient'?null:id==='contradicted'?'CALL_FAILED':'CALL_CONNECTED'}));
