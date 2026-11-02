@@ -485,6 +485,65 @@ def prepare_browser_claim(case_id: str, body: BrowserClaimPrepareRequest):
 
 
 
+
+class BrowserClaimConfirmRequest(BrowserClaimPrepareRequest):
+    tx_hash: str
+    created_at: int
+
+
+@app.post("/api/v1/browser-transactions/cases/{case_id}/claims/confirm")
+def confirm_browser_claim(case_id: str, body: BrowserClaimConfirmRequest):
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    record = cases_db.get(case_id)
+    if not record or record["is_closed"]:
+        raise HTTPException(409, "Open case required")
+    if body.step_id >= len(record["steps"]):
+        raise HTTPException(422, "Invalid step")
+    if not Web3.is_address(body.police_address) or not Web3.is_hex(body.tx_hash) or len(body.tx_hash) != 66:
+        raise HTTPException(422, "Invalid account or transaction")
+    police = Web3.to_checksum_address(body.police_address)
+    if not contract.functions.isPolice(police).call():
+        raise HTTPException(403, "Police wallet required")
+    try:
+        receipt = w3.eth.get_transaction_receipt(body.tx_hash)
+        transaction = w3.eth.get_transaction(body.tx_hash)
+    except Exception:
+        raise HTTPException(409, "Claim transaction not yet confirmed")
+    if receipt.status != 1 or not receipt.to or receipt.to.lower() != contract.address.lower() or transaction["from"].lower() != police.lower():
+        raise HTTPException(409, "Claim transaction mismatch")
+    claim_id_hash = "0x" + hashlib.sha256(body.claim_id.encode("utf-8")).hexdigest()
+    author_hash = "0x" + hashlib.sha256(police.lower().encode("utf-8")).hexdigest()
+    claim_hash = hash_claim_text(body.claim_text)
+    expected = contract.functions.anchorClaim(case_uint(case_id), body.step_id, claim_id_hash,
+                    body.claim_version, claim_hash, author_hash, body.created_at)._encode_transaction_data()
+    actual = transaction["input"]
+    if (actual if isinstance(actual, str) else Web3.to_hex(actual)).lower() != expected.lower():
+        raise HTTPException(409, "Claim calldata mismatch")
+    events = contract.events.ClaimAnchored().process_receipt(receipt)
+    if not any(event["args"]["caseId"] == case_uint(case_id)
+               and event["args"]["stepId"] == body.step_id for event in events):
+        raise HTTPException(409, "Matching ClaimAnchored event missing")
+    tx_hash = Web3.to_hex(receipt.transactionHash)
+    for existing in record.get("v11_claims", []):
+        if existing["claim_id"] == body.claim_id and existing["claim_version"] == body.claim_version:
+            if existing.get("claim_tx_hash", "").lower() == tx_hash.lower():
+                return existing
+            raise HTTPException(409, "Claim version already registered")
+    result = {"schema_version": "1.1", "case_id": case_id,
+              "step_id": body.step_id, "claim_id": body.claim_id,
+              "claim_version": body.claim_version, "claim_text": body.claim_text,
+              "claim_hash": claim_hash, "claim_tx_hash": tx_hash,
+              "chain_status": "CONFIRMED",
+              "claim_created_at": datetime.fromtimestamp(body.created_at, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "officer_id": police, "claimed_occurred_at": None, "structured_claim": None}
+    record.setdefault("v11_claims", []).append(result)
+    save_case(record)
+    return result
+
+
+
 def require_admin_transaction_wallet():
     """Prevent server-side admin writes from using an unlocked RPC account.
 
