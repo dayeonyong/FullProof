@@ -29,6 +29,11 @@ describe('Backend-owned case list',()=>{
  it('routes Vercel API calls through same-origin /backend proxy',()=>{
   expect(official).toContain("window.location.hostname.endsWith('.vercel.app')?'/backend'");
  });
+ it('keeps wallet-free drafts separate from live on-chain cases',()=>{
+  expect(dashboard).toContain('createTeamDraft()');
+  expect(dashboard).toContain("api<TeamDraft>('/api/v1/frontend/team-drafts'");
+  expect(dashboard).toContain('Sepolia 미기록');
+ });
  it('preserves MetaMask-backed creation code separately',()=>{
   expect(official).toContain('await createSepoliaDemoCase(id');
   expect(official).toContain('/api/v1/browser-transactions/cases/confirm');
