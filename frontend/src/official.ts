@@ -93,10 +93,26 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
   const account=await walletAccount('0xF28d8E3890918c9E2A21C3Ed5C59fb450c977494',11155111,config.chain.rpc_url);
   if(!window.ethereum)throw Error('MetaMask가 필요합니다.');
   const endpoint='/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/claims/';
-  const prep=await request<{from:string;to:string;data:string;gas:string;value:string;created_at:number}>(endpoint+'prepare',{...data,police_address:account});
-  if(prep.to.toLowerCase()!==config.chain.contract_address?.toLowerCase())throw Error('Claim 계약 주소 불일치');
-  const txHash=await sendWalletContractTransaction(window.ethereum,prep);
-  return request(endpoint+'confirm',{...data,police_address:account,tx_hash:txHash,created_at:prep.created_at});
+  const pendingKey='fullproof.sepolia.claim.'+match[1]+'.'+data.step_id;
+  type PendingClaim={claim_id:string;claim_version:number;claim_text:string;step_id:number;tx_hash:string;created_at:number};
+  let pending:PendingClaim|null=null;
+  const saved=sessionStorage.getItem(pendingKey);
+  if(saved){try{pending=JSON.parse(saved) as PendingClaim}catch{throw Error('이전 Claim 거래 정보를 읽을 수 없습니다. 기록을 확인해 주세요.');}}
+  if(pending){
+   if(pending.claim_text!==data.claim_text||pending.step_id!==data.step_id)
+    throw Error('처리 중인 Claim 거래가 있습니다. 기존 Claim을 먼저 확인해 주세요.');
+   data.claim_id=pending.claim_id;
+   data.claim_version=pending.claim_version;
+  }else{
+   const prep=await request<{from:string;to:string;data:string;gas:string;value:string;created_at:number}>(endpoint+'prepare',{...data,police_address:account});
+   if(prep.to.toLowerCase()!==config.chain.contract_address?.toLowerCase()||prep.from.toLowerCase()!==account.toLowerCase())throw Error('Claim 계약 또는 경찰 지갑 주소 불일치');
+   const hash=await sendWalletContractTransaction(window.ethereum,prep);
+   pending={...data,tx_hash:hash,created_at:prep.created_at};
+   sessionStorage.setItem(pendingKey,JSON.stringify(pending));
+  }
+  const result=await request(endpoint+'confirm',{...data,police_address:account,tx_hash:pending.tx_hash,created_at:pending.created_at});
+  sessionStorage.removeItem(pendingKey);
+  return result;
  }
  match=path.match(/^\/api\/v1\/claims\/([^/]+)\/extract$/);
  if(match&&b){const c=await findClaim(match[1]),claim=c.claims.find(x=>x.claim_id===match![1]&&x.claim_version===Number(b.claim_version||c.claims.at(-1)?.claim_version))!;const result=await request(path,{case_id:c.case_id,claim_version:claim.claim_version});return {...result as object,execution:{is_simulated:(await getConfig()).ai.is_simulated}}}
