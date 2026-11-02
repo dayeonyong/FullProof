@@ -1,4 +1,6 @@
 import {OperationError} from './Details';
+import {teamDraftPath} from './TeamDraftWorkspace';
+import type {TeamDraft} from './TeamDraftWorkspace';
 import {recoveredDemoCases} from './recoveredDemoCases';
 import {caseTitle,caseReference} from './presentation';
 import {useContext,useEffect,useState} from 'react';
@@ -21,10 +23,18 @@ function statusFor(c:Case,role:Role){
 export default function Dashboard(){
  const {role,system}=useContext(Session),info=roleInfo[role],navigate=useNavigate();
  const [cases,setCases]=useState<Case[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[newCaseTitle,setNewCaseTitle]=useState(''),[creating,setCreating]=useState(false),[query,setQuery]=useState(''),[filter,setFilter]=useState('ALL'),[region,setRegion]=useState('ALL'),[workOnly,setWorkOnly]=useState(false);
+ const [teamDrafts,setTeamDrafts]=useState<TeamDraft[]>([]),[teamDraftTitle,setTeamDraftTitle]=useState(''),[teamDraftBusy,setTeamDraftBusy]=useState(false),[teamDraftError,setTeamDraftError]=useState('');
  const [archived,setArchived]=useState<RecoveredDemoRecord[]>([]),[archiveError,setArchiveError]=useState('');
  async function refresh(){setLoading(true);setError('');try{setCases(await api<Case[]>('/api/v1/cases'))}catch(e){setError(e instanceof Error?e.message:'사건 조회 실패')}finally{setLoading(false)}}
+ async function refreshTeamDrafts(){try{setTeamDrafts(await api<TeamDraft[]>('/api/v1/frontend/team-drafts'));setTeamDraftError('')}catch(e){setTeamDraftError(e instanceof Error?e.message:'시연 사건 조회 실패')}}
+ async function createTeamDraft(){
+  if(teamDraftBusy||!teamDraftTitle.trim())return;
+  setTeamDraftBusy(true);setTeamDraftError('');
+  try{const created=await api<TeamDraft>('/api/v1/frontend/team-drafts',{title:teamDraftTitle.trim()});setTeamDraftTitle('');await refreshTeamDrafts();navigate(teamDraftPath(created.draft_id))}
+  catch(e){setTeamDraftError(e instanceof Error?e.message:'시연 사건 생성 실패')}finally{setTeamDraftBusy(false)}
+ }
  async function refreshArchive(){try{setArchived(await api<RecoveredDemoRecord[]>('/api/v1/frontend/recovered-demo-cases'));setArchiveError('')}catch(e){setArchiveError(e instanceof Error?e.message:'복구 기록 조회 실패')}}
- useEffect(()=>{setWorkOnly(false);void refresh();void refreshArchive()},[role]); 
+ useEffect(()=>{setWorkOnly(false);void refresh();void refreshArchive();void refreshTeamDrafts()},[role]); 
  async function createNewCase(){
   if(creating)return;
   if(!newCaseTitle.trim()){setError('사건명을 입력해 주세요.');return}
@@ -66,6 +76,15 @@ export default function Dashboard(){
   <div className="workspace-intro"><div className="intro-copy"><span className="intro-kicker"><span/> {info.name} WORKSPACE</span><h2>{info.focus}</h2><p>{info.hint}</p><a href="#case-list" className="intro-link">{role==='AGENCY'?'제공 대상 확인':role==='ADMIN'?'검토 목록 확인':'사건 업무 시작'}<ArrowUpRight size={16}/></a></div><div className="workspace-art" aria-hidden="true"><img src={'/art/'+role.toLowerCase()+'.webp'} alt=""/></div></div>
   <div className="stats">{stats.map((s,i)=><div className={'stat stat-'+i} key={s.name}><div>{s.name}<s.icon size={18}/></div><strong>{s.count}<small>{s.unit}</small></strong><p>{s.note}</p></div>)}</div>
   {error&&<OperationError message={error}/>}
+  <section className="panel" style={{padding:20,marginBottom:22}} aria-label="팀 시연 사건 임시 저장"><div className="section-title"><div><h2>팀 시연 사건 · 블록체인 기록 전</h2><p>사건과 Claim·Proof 초안을 먼저 입력합니다. MetaMask 없이 작성 가능하며, 실제 Sepolia 확정 기록과 구분됩니다.</p></div></div>
+   {teamDraftError&&<p role="alert">{teamDraftError}</p>}
+   <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
+    <input aria-label="팀 시연 사건명" placeholder="가상 사건명 입력" maxLength={120} value={teamDraftTitle} onChange={e=>setTeamDraftTitle(e.target.value)} style={{flex:'1 1 220px',padding:12}}/>
+    <button type="button" className="primary" disabled={teamDraftBusy||!teamDraftTitle.trim()} onClick={()=>void createTeamDraft()}>{teamDraftBusy?'저장 중…':'사건 초안 생성 (MetaMask 불필요)'}</button>
+   </div>
+   {teamDrafts.length?<div className="scenario-cards">{teamDrafts.map(d=><Link className="scenario-card" key={d.draft_id} to={teamDraftPath(d.draft_id)}><strong>{d.title}</strong><p>{d.draft_id}</p><p>Claim {d.claim_text?'작성됨':'미작성'} · Proof {d.proof_text?'작성됨':'미작성'}</p><span>임시 저장 · Sepolia 미기록</span></Link>)}</div>:<p className="muted">저장된 팀 시연 사건 초안이 없습니다.</p>}
+   <p className="caption">공개 시연 환경에는 가상 자료만 입력하세요. Render의 로컬 SQLite는 재배포 시 사라질 수 있어 영구 저장이 보장되지 않습니다.</p>
+  </section>
   {role==='OFFICER'&&<details className="new-case scenario-picker" open><summary><Layers3 size={17}/>팀 API 등록 사건<span>서버에 저장된 사건만 표시<ChevronRight size={16}/></span></summary><div className="scenario-body"><div className="section-title"><div><h2>등록된 사건을 선택하세요.</h2><p>Render 백엔드에서 조회한 실제 사건 기록입니다. 선택만으로 새 블록체인 거래를 보내지 않습니다.</p></div></div>{loading?<Loading/>:cases.length?<div className="scenario-cards">{cases.map(c=><Link key={c.case_id} to={caseLink(role,c.case_id)} className="scenario-card"><div><FolderOpen size={17}/><span>{c.status==='CLOSED'?'종결':'진행 중'}</span></div><strong>{c.title}</strong><p>{c.case_id}</p></Link>)}</div>:<Empty>현재 백엔드에 등록된 사건이 없습니다. 이전에 로컬에서 만든 사건은 서버 데이터베이스에 없을 수 있습니다.</Empty>}<div className="scenario-footer"><label htmlFor="new-case-title">새 사건명</label><input id="new-case-title" aria-label="새 사건명" value={newCaseTitle} onChange={e=>setNewCaseTitle(e.target.value)} placeholder="새 사건 이름을 입력하세요" maxLength={120} disabled={creating}/><button type="button" className="primary" onClick={()=>void createNewCase()} disabled={creating||!newCaseTitle.trim()||!system?.chain.available}>{creating?'사건 등록 중…':'새 사건 등록'}</button></div><p className="caption">기존 사건은 팀 API에서 불러옵니다. 신규 사건은 Sepolia 등록 절차가 필요하며, 보안 경고가 있다면 MetaMask 거래를 승인하지 마세요.</p></div></details>}
   {role==='OFFICER'&&<section className="panel" aria-label="복구된 로컬 시연 사건"><div className="panel-heading"><div><span className="eyebrow">RECOVERED LOCAL ARCHIVE</span><h2>복구된 로컬 시연 사건 <span className="count-chip">{recoveredDemoCases.length}</span></h2><p className="muted">업로드한 SQLite 복구본에서 확인된 실제 로컬 시연 기록입니다. 현재 Sepolia에 등록된 사건이 아니며, 열람 전용 목록입니다.</p></div></div>{archiveError&&<p className="muted">복구 백엔드 API가 아직 배포되지 않았습니다. {archiveError}</p>}<div className="scenario-cards">{archived.length?archived.map(c=><details key={c.case_id} className="scenario-card" aria-label={c.title+' 로컬 시연 사건'}><summary><FolderOpen size={17}/> <strong>{c.title}</strong><p>{c.case_id}</p><p>수사 단계 {c.steps.length}개 · Claim {c.claims.length}건 · 읽기 전용</p></summary><div><strong>기존 수사 단계</strong>{c.steps.map(step=><p key={step.step_id}>{step.step_name} · {step.status}</p>)}<strong>복구된 Claim 원문</strong>{c.claims.map(claim=><div key={claim.claim_id}><p>{claim.claim_text}</p><p>추출 상태: {claim.extraction_status}</p><p>Claim ID: {claim.claim_id}</p><p>Claim 해시: <code>{claim.claim_hash}</code></p></div>)}<p>기존 로컬 DB의 Claim 원문입니다. Sepolia 검증이나 증빙 기록을 의미하지 않습니다.</p></div></details>):recoveredDemoCases.map(c=><div key={c.case_id} className="scenario-card"><div><FolderOpen size={17}/><span>로컬 시연 · API 배포 대기</span></div><strong>{c.title}</strong><p>{c.case_id}</p></div>)}</div><p className="caption">이 목록은 Render 사건 데이터베이스와 별개입니다. 블록체인 검증·증빙 등록·관리자 종결을 여기서 실행할 수 없습니다.</p></section>}
   <div className="dashboard-columns"><section className="panel case-list-panel" id="case-list"><div className="panel-heading"><div><span className="eyebrow">{role==='AGENCY'?'EVIDENCE QUEUE':role==='ADMIN'?'REVIEW QUEUE':'CASE DIRECTORY'}</span><h2>{role==='AGENCY'?'증빙 요청 대상 사건':role==='ADMIN'?'검토 대상 사건':'사건 목록'} <span className="count-chip">{rows.length}</span></h2></div><div className="list-switch"><button aria-pressed={!workOnly} onClick={()=>setWorkOnly(false)}>전체</button><button aria-pressed={workOnly} onClick={()=>setWorkOnly(true)}>{role==='AGENCY'?'제공 대기':role==='ADMIN'?'검토 필요':'진행 중'}</button></div></div><div className="filters"><div className="search"><Search size={16}/><input aria-label="사건 검색" placeholder="사건명 또는 사건 ID 검색" value={query} onChange={e=>setQuery(e.target.value)}/></div><select aria-label="지역 필터" value={region} onChange={e=>setRegion(e.target.value)}><option value="ALL">전체 지역</option>{[...new Set(cases.map(c=>c.region).filter(Boolean))].map(r=><option key={r} value={r}>{r}</option>)}</select><select aria-label="진행 상태" value={filter} onChange={e=>setFilter(e.target.value)}><option value="ALL">전체 상태</option><option value="OPEN">진행 중</option><option value="CLOSED">종결</option></select></div>
