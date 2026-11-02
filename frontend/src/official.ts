@@ -47,6 +47,26 @@ async function createSepoliaDemoCase(id:string,title:string,config:System):Promi
  return record;
 }
 
+async function createSepoliaDemoStep(id:string,config:System):Promise<void>{
+ const police='0xF28d8E3890918c9E2A21C3Ed5C59fb450c977494';
+ const account=await walletAccount(police,11155111,config.chain.rpc_url);
+ if(!window.ethereum)throw Error('MetaMask가 필요합니다.');
+ const stepName='통화 사실 확인';
+ const pendingKey='fullproof.sepolia.step.'+id;
+ let hash=sessionStorage.getItem(pendingKey);
+ if(!hash){
+  const prepared=await request<{from:string;to:string;data:string;gas:string;value:string}>(
+   '/api/v1/browser-transactions/cases/'+encodeURIComponent(id)+'/steps/prepare',
+   {police_address:account,step_name:stepName,is_required:true});
+  if(prepared.from.toLowerCase()!==account.toLowerCase()||prepared.to.toLowerCase()!==config.chain.contract_address?.toLowerCase())throw Error('수사 단계 거래 주소 불일치');
+  hash=await sendWalletContractTransaction(window.ethereum,prepared);
+  sessionStorage.setItem(pendingKey,hash);
+ }
+ await request('/api/v1/browser-transactions/cases/'+encodeURIComponent(id)+'/steps/confirm',
+  {police_address:account,step_name:stepName,is_required:true,tx_hash:hash});
+ sessionStorage.removeItem(pendingKey);
+}
+
 async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
  if(path==='/api/v1/demo/session')return {token:'LOCAL_UI_ROLE_ONLY'}; // UI role is NOT authentication
  if(path==='/api/v1/system/status')return getConfig();
@@ -58,7 +78,8 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
   const record= config.chain.chain_id===11155111
    ? await createSepoliaDemoCase(id,String(b.title||''),config)
    : await request<{case_id:string}>('/api/v1/cases',{case_id:id,title:b.title});
-  try{await request('/api/v1/cases/'+id+'/steps',{step_name:'통화 사실 확인',is_required:true})}catch(e){throw Error('사건은 생성되었지만 단계 생성 응답이 불명확합니다. 사건을 열어 단계 상태를 확인하세요. '+(e as Error).message)}
+  try{if(config.chain.chain_id===11155111)await createSepoliaDemoStep(id,config);
+      else await request('/api/v1/cases/'+id+'/steps',{step_name:'통화 사실 확인',is_required:true})}catch(e){throw Error('사건은 생성되었지만 단계 생성 응답이 불명확합니다. 사건을 열어 단계 상태를 확인하세요. '+(e as Error).message)}
   return getCase(record.case_id);
  }
  let match=path.match(/^\/api\/v1\/cases\/([^/]+)$/);
