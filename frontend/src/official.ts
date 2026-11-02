@@ -84,6 +84,32 @@ async function createSepoliaDemoStep(id:string,config:System):Promise<void>{
  }
 }
 
+async function completeSepoliaVerification(job:VerificationRequest,config:System):Promise<VerificationRequest>{
+ if(job.request_state!=='AWAITING_WALLET')return job;
+ if(!window.ethereum)throw Error('AI 검증 결과를 기록하려면 MetaMask가 필요합니다.');
+ const recorder=await walletAccount('0xF28d8E3890918c9E2A21C3Ed5C59fb450c977494',11155111,config.chain.rpc_url);
+ const endpoint='/api/v1/browser-transactions/verifications/'+encodeURIComponent(job.verification_id)+'/';
+ const pendingKey='fullproof.sepolia.verification.'+job.verification_id;
+ let hash=sessionStorage.getItem(pendingKey);
+ if(!hash){
+  const prepared=await request<{from:string;to:string;data:string;gas:string;value:string}>(endpoint+'prepare',{recorder_address:recorder});
+  if(prepared.from.toLowerCase()!==recorder.toLowerCase()||prepared.to.toLowerCase()!==config.chain.contract_address?.toLowerCase())throw Error('검증 결과 거래 주소 불일치');
+  hash=await sendWalletContractTransaction(window.ethereum,prepared);
+  sessionStorage.setItem(pendingKey,hash);
+ }
+ for(let attempt=0;attempt<5;attempt++){
+  try{
+   await request(endpoint+'confirm',{recorder_address:recorder,tx_hash:hash});
+   sessionStorage.removeItem(pendingKey);
+   return request<VerificationRequest>('/api/v1/verification-requests/'+encodeURIComponent(job.verification_id));
+  }catch(error){
+   if((error as {status?:number}).status!==409||attempt===4)throw error;
+   await new Promise<void>(resolve=>setTimeout(resolve,2500));
+  }
+ }
+ throw Error('검증 결과 거래 확인 실패. 기존 거래 해시로 다시 확인해 주세요.');
+}
+
 async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
  if(path==='/api/v1/demo/session')return {token:'LOCAL_UI_ROLE_ONLY'}; // UI role is NOT authentication
  if(path==='/api/v1/system/status')return getConfig();
@@ -197,7 +223,14 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
   const c=await findClaim(String(b.claim_id)),claim=c.claims.find(x=>x.claim_id===b.claim_id&&x.claim_version===b.claim_version)!;
   const maps=c.mappings.filter(m=>m.claim_id===claim.claim_id&&m.claim_version===claim.claim_version&&m.mapping_status==='CONFIRMED');
   const proofs=c.proofs.filter(p=>maps.some(m=>m.proof_id===p.proof_id&&m.proof_version===p.proof_version));
-  return startVerification(request,{claim:{case_id:c.case_id,claim_id:claim.claim_id,claim_version:claim.claim_version},proofs:proofs.map(content)});
+  const config=await getConfig();
+  const transport=async <T>(url:string,body?:unknown):Promise<T>=>{
+   const job=await request<T>(url,body);
+   if(config.chain.chain_id===11155111&&url.startsWith('/api/v1/verification-requests')&&job&&typeof job==='object'&&'request_state' in job&&job.request_state==='AWAITING_WALLET')
+    return completeSepoliaVerification(job as VerificationRequest,config) as Promise<T>;
+   return job;
+  };
+  return startVerification(transport,{claim:{case_id:c.case_id,claim_id:claim.claim_id,claim_version:claim.claim_version},proofs:proofs.map(content)});
  }
  match=path.match(/^\/api\/v1\/verifications\/([^/]+)$/);
  if(match&&!b){
