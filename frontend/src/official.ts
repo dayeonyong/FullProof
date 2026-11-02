@@ -85,7 +85,19 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
  let match=path.match(/^\/api\/v1\/cases\/([^/]+)$/);
  if(match){lastCase=await getCase(match[1]);return lastCase}
  match=path.match(/^\/api\/v1\/cases\/([^/]+)\/claims$/);
- if(match&&b){const c=await getCase(match[1]),latest=c.claims.filter(x=>x.claim_id===b.claim_id).at(-1);return request(path,{claim_id:b.claim_id||'CL-'+crypto.randomUUID(),claim_version:b.claim_id?(latest?.claim_version||0)+1:1,claim_text:b.claim_text,step_id:b.step_id})}
+ if(match&&b){
+  const c=await getCase(match[1]),latest=c.claims.filter(x=>x.claim_id===b.claim_id).at(-1);
+  const data={claim_id:String(b.claim_id||'CL-'+crypto.randomUUID()),claim_version:b.claim_id?(latest?.claim_version||0)+1:1,claim_text:String(b.claim_text||''),step_id:Number(b.step_id)};
+  const config=await getConfig();
+  if(config.chain.chain_id!==11155111)return request(path,data);
+  const account=await walletAccount('0xF28d8E3890918c9E2A21C3Ed5C59fb450c977494',11155111,config.chain.rpc_url);
+  if(!window.ethereum)throw Error('MetaMask가 필요합니다.');
+  const endpoint='/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/claims/';
+  const prep=await request<{from:string;to:string;data:string;gas:string;value:string;created_at:number}>(endpoint+'prepare',{...data,police_address:account});
+  if(prep.to.toLowerCase()!==config.chain.contract_address?.toLowerCase())throw Error('Claim 계약 주소 불일치');
+  const txHash=await sendWalletContractTransaction(window.ethereum,prep);
+  return request(endpoint+'confirm',{...data,police_address:account,tx_hash:txHash,created_at:prep.created_at});
+ }
  match=path.match(/^\/api\/v1\/claims\/([^/]+)\/extract$/);
  if(match&&b){const c=await findClaim(match[1]),claim=c.claims.find(x=>x.claim_id===match![1]&&x.claim_version===Number(b.claim_version||c.claims.at(-1)?.claim_version))!;const result=await request(path,{case_id:c.case_id,claim_version:claim.claim_version});return {...result as object,execution:{is_simulated:(await getConfig()).ai.is_simulated}}}
  if(path==='/api/v1/proofs/drafts'&&b){
