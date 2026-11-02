@@ -1,7 +1,7 @@
 import {OperationError} from './Details';
 import {caseTitle,caseReference} from './presentation';
 import {useContext,useEffect,useState} from 'react';
-import {Link,useNavigate} from 'react-router-dom';
+import {Link} from 'react-router-dom';
 import {ArrowUpRight,CheckCircle2,ChevronRight,FileCheck2,FileText,Fingerprint,FolderOpen,Layers3,RefreshCw,Search,ShieldCheck,UploadCloud,Clock3} from 'lucide-react';
 import {api,fmt,isRecorded,short} from './api';
 import type {Case,Role} from './api';
@@ -17,7 +17,7 @@ function statusFor(c:Case,role:Role){
  return !c.claims.length?{title:'원문 등록',note:'수사 진행 기록부터 시작',value:'PENDING'}:!c.claims.at(-1)?.structured_claim?{title:'AI 구조화',note:'행동·대상·시각 추출',value:'PENDING'}:!v?{title:'증빙 연결·검증',note:'원천기관 자료 비교',value:'PENDING'}:{title:'검증 결과 확인',note:v.freshness_status==='CURRENT'?'최신 입력 기준':'입력 변경·재검증 필요',value:v.freshness_status==='CURRENT'?v.verdict||'PENDING':'NEEDS_REVERIFICATION'};
 }
 export default function Dashboard(){
- const {role,system}=useContext(Session),info=roleInfo[role];
+ const {role}=useContext(Session),info=roleInfo[role];
  const [cases,setCases]=useState<Case[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[query,setQuery]=useState(''),[filter,setFilter]=useState('ALL'),[region,setRegion]=useState('ALL'),[workOnly,setWorkOnly]=useState(false);
  async function refresh(){setLoading(true);setError('');try{setCases(await api<Case[]>('/api/v1/cases'))}catch(e){setError(e instanceof Error?e.message:'사건 조회 실패')}finally{setLoading(false)}}
  useEffect(()=>{setWorkOnly(false);void refresh()},[role]);
