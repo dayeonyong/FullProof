@@ -3343,8 +3343,10 @@ class BrowserVerificationConfirmation(BrowserVerificationRequest):
 
 
 def staged_browser_verification(verification_id):
-    from mentor_support import row_by_id
+    from mentor_support import row_by_id, namespace
     row = row_by_id(verification_id)
+    if row["namespace"] != namespace(current_core()):
+        raise HTTPException(409, "Verification belongs to a different blockchain deployment")
     if row["state"] not in ("AWAITING_WALLET", "CONFIRMED") or not row.get("result_json"):
         raise HTTPException(409, "Verification result is not ready for wallet")
     result = json.loads(row["result_json"])
