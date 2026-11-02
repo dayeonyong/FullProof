@@ -446,6 +446,45 @@ def confirm_browser_step(case_id: str, body: BrowserStepConfirmation):
     return record
 
 
+
+class BrowserClaimPrepareRequest(BaseModel):
+    police_address: str
+    claim_id: str
+    claim_version: int = Field(ge=1)
+    claim_text: str
+    step_id: int = Field(ge=0)
+
+
+@app.post("/api/v1/browser-transactions/cases/{case_id}/claims/prepare")
+def prepare_browser_claim(case_id: str, body: BrowserClaimPrepareRequest):
+    from browser_claim import prepare_claim
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    record = cases_db.get(case_id)
+    if not record or record["is_closed"]:
+        raise HTTPException(409, "Open case required")
+    if body.step_id >= len(record["steps"]):
+        raise HTTPException(422, "Invalid step")
+    if any(c["claim_id"] == body.claim_id and c["claim_version"] == body.claim_version
+           for c in record.get("v11_claims", [])):
+        raise HTTPException(409, "Claim version already recorded")
+    try:
+        tx, created_at = prepare_claim(w3, contract, case_id, body.step_id,
+                                       body.claim_id, body.claim_version,
+                                       body.claim_text, body.police_address)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    except Exception as exc:
+        raise HTTPException(409, f"Claim preflight failed: {exc}")
+    return {"from": body.police_address, "to": tx["to"],
+            "data": tx["data"], "gas": hex(tx["gas"]),
+            "value": hex(tx.get("value", 0)), "created_at": created_at}
+
+
+
 def require_admin_transaction_wallet():
     """Prevent server-side admin writes from using an unlocked RPC account.
 
