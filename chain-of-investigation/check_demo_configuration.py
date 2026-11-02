@@ -26,7 +26,7 @@ def main():
     print("Admin address:", contract.functions.admin().call())
     agency = os.getenv("UI_AGENCY_ADDRESS", "")
     if not agency:
-        print("BLOCKER: UI_AGENCY_ADDRESS not set in this environment")
+        print("LOCAL CONFIG MISSING: UI_AGENCY_ADDRESS (Render may be configured separately)")
     elif not Web3.is_address(agency):
         print("BLOCKER: UI_AGENCY_ADDRESS invalid")
     else:
@@ -37,6 +37,7 @@ def main():
         if not info[1] or int(info[0]) not in (2, 3):
             print("BLOCKER: Agency requires an active TELECOM or CCTV registration")
     print("Note: Local environment does not represent Render variables.")
+    print("Note: Agency setup must be checked in Render or the deployed status API.")
     print("Note: This tool does not prove the full UI workflow works.")
 
 
