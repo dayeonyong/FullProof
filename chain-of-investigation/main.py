@@ -572,7 +572,7 @@ def prepare_browser_verification(verification_id: str, body: BrowserVerification
     if not contract.functions.isVerificationRecorder(recorder).call():
         raise HTTPException(403, "Registered verification recorder required")
     row = row_by_id(verification_id)
-    if row["namespace"] != namespace(__import__(__name__)) or not row.get("result_json"):
+    if row["namespace"] != namespace(__import__("sys").modules[__name__]) or not row.get("result_json"):
         raise HTTPException(409, "Verification result is unavailable on current chain")
     result = json.loads(row["result_json"])
     if row["state"] == "CONFIRMED" or result.get("verification_tx_hash"):
