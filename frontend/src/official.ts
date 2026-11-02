@@ -102,11 +102,6 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
    if(!admin||!config.chain.contract_address)throw Error('관리자 지갑 또는 컨트랙트 주소 설정이 없습니다.');
    const account=await walletAccount(admin,11155111,config.chain.rpc_url);
    const reason=String(b.reason_text||'').trim();
-   const prepared=await request<{from:string;to:string;data:string;gas:string;value:string}>(
-    '/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/close/prepare',
-    {admin_address:account,reason});
-   if(prepared.from.toLowerCase()!==account.toLowerCase()||
-      prepared.to.toLowerCase()!==config.chain.contract_address.toLowerCase())throw Error('관리자 거래 대상이 일치하지 않습니다.');
    const provider=window.ethereum;
    if(!provider)throw Error('MetaMask가 필요합니다.');
    const pendingKey='fullproof.sepolia.close.'+config.chain.contract_address.toLowerCase()+'.'+match[1];
@@ -117,9 +112,17 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
    } catch { throw Error('이전 종결 거래 정보를 확인할 수 없습니다. 기존 기록을 확인해 주세요.'); }
    if(pending&&(pending.account.toLowerCase()!==account.toLowerCase()||pending.reason!==reason))
     throw Error('확인 대기 중인 이전 종결 거래가 있습니다. 기존 종결 사유와 계정으로 결과를 확인해 주세요.');
-   const txHash=pending?.txHash||await sendWalletContractTransaction(provider,{
-    from:prepared.from,to:prepared.to,data:prepared.data,gas:prepared.gas,value:prepared.value
-   });
+   let txHash=pending?.txHash;
+   if(!txHash){
+    const prepared=await request<{from:string;to:string;data:string;gas:string;value:string}>(
+     '/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/close/prepare',
+     {admin_address:account,reason});
+    if(prepared.from.toLowerCase()!==account.toLowerCase()||
+       prepared.to.toLowerCase()!==config.chain.contract_address.toLowerCase())throw Error('관리자 거래 대상이 일치하지 않습니다.');
+    txHash=await sendWalletContractTransaction(provider,{
+     from:prepared.from,to:prepared.to,data:prepared.data,gas:prepared.gas,value:prepared.value
+    });
+   }
    if(!pending)sessionStorage.setItem(pendingKey,JSON.stringify({txHash,account,reason}));
    const result=await request('/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/close/confirm',
     {tx_hash:txHash,admin_address:account,reason});
