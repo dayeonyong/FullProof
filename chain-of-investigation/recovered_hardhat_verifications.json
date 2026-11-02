@@ -1,0 +1,93 @@
+{
+  "network": "Hardhat Local",
+  "chain_id": 31337,
+  "contract_address": "0xD56e6F296352B03C3c3386543185E9B8c2e5Fd0b",
+  "note": "Local test-chain records; not Sepolia transactions.",
+  "verification_count": 12,
+  "records": [
+    {
+      "case_id": "AI-INTEGRATION-1896a4c025d4",
+      "verdict": "SUPPORTED",
+      "verification_hash": "0x0be06f2c8756b84b07941c98a14f82b9e693b85c85ff2f536a13c2192a330eb9",
+      "tx_hash": "0xc57d024b8feb7b46433d7b0754e42aa80accc46eabd2ff197758990b68ff1c3e",
+      "block_number": 746
+    },
+    {
+      "case_id": "AI-INTEGRATION-fc61e5ff9d31",
+      "verdict": "SUPPORTED",
+      "verification_hash": "0xd9c9b3ac74c326f2e09c2867839e6aea1bf62910a35060ff2e536501a1ef5397",
+      "tx_hash": "0xe10a9034d2ae2e923964bfb446cf44bb7d4bb41ddbc8217e10b41fe0657206bd",
+      "block_number": 755
+    },
+    {
+      "case_id": "AI-INTEGRATION-efc0ee2f068a",
+      "verdict": "SUPPORTED",
+      "verification_hash": "0x0c9a5dfc2b39dcb9a8f022aa12bfd63fddc34f44d6231f7f4ac4c0f1b527f37d",
+      "tx_hash": "0x11f7e5d9653f92db7bc70f1333f7765436e42d46d84fbd5cb1f0156952d458ad",
+      "block_number": 760
+    },
+    {
+      "case_id": "AI-INTEGRATION-6b0f4e3b455d",
+      "verdict": "SUPPORTED",
+      "verification_hash": "0xf8d84c618eb4289c631fdce9c1d8165ec3a6fa8279379eee7e0cbae62065a501",
+      "tx_hash": "0x76e88594a526cf79b2a8eab71eda03bc3561e3e596991ee11a22868336a6b887",
+      "block_number": 765
+    },
+    {
+      "case_id": "AI-INTEGRATION-139de4411bda",
+      "verdict": "INSUFFICIENT",
+      "verification_hash": "0xff9795d068bea5dca6f409b4b283dd532597436291a6cfa90504f96a89233597",
+      "tx_hash": "0x119d070250aa9ac7698a363bd5fec65b84b17583388f693aadb3974bf0c3ec99",
+      "block_number": 772
+    },
+    {
+      "case_id": "AI-INTEGRATION-139de4411bda",
+      "verdict": "SUPPORTED",
+      "verification_hash": "0x4942aa8c1f248d3a6f8623444e905b397dc5f9b0da9e17cbc8fe3f7b725b7cfb",
+      "tx_hash": "0x56fa98bab7b39ac69e5ad4c043e67001d3af7f42c77bf9a9cfe7b74d64585550",
+      "block_number": 773
+    },
+    {
+      "case_id": "AI-INTEGRATION-ce17e981aaa3",
+      "verdict": "SUPPORTED",
+      "verification_hash": "0xe7e4ab686b41fe8a6c22cd548e78eab141b1152f58bbbe695ca3859c8aac7ecc",
+      "tx_hash": "0xfef2a3cb0c5ddbd33df68993b0f0b5675b2f657fc3b3583d92ed70016095f405",
+      "block_number": 778
+    },
+    {
+      "case_id": "AI-INTEGRATION-ce17e981aaa3",
+      "verdict": "SUPPORTED",
+      "verification_hash": "0xa633c4d240e70bedc891d1550f42e4720ffb22f91448445b84560a3231a53c28",
+      "tx_hash": "0xb15887ef791b3d6f866ab8f521b8cddb5309ebdeb9d8536d2d3c4957584bc78a",
+      "block_number": 781
+    },
+    {
+      "case_id": "AI-INTEGRATION-a9dd03d3215e",
+      "verdict": "SUPPORTED",
+      "verification_hash": "0xe579a74ce422ceb152972e5b16de52c5dd06308429be5ce3463cd1f86a9a4de5",
+      "tx_hash": "0x38e83e546e75d29a5f68d1c12aca02a2d1822a5d093a0aff0010e9710bc4f351",
+      "block_number": 786
+    },
+    {
+      "case_id": "AI-INTEGRATION-a2916590355f",
+      "verdict": "SUPPORTED",
+      "verification_hash": "0x8aaf7105f0612ece2a3508f9c7712378d00456e184f58bc32dcd72d05360144c",
+      "tx_hash": "0xc84b54bbb5683acab87c14a90981eb08f1f23518a6e27f9174d2587cc2140862",
+      "block_number": 791
+    },
+    {
+      "case_id": "AI-INTEGRATION-c57158e88157",
+      "verdict": "INSUFFICIENT",
+      "verification_hash": "0xd2bb1128e589fc2a338e38150477baefacc5c3aa79d5614ea0601ad052e2303e",
+      "tx_hash": "0x7fed19d19abcc677e8b54f394f3f5fd456a6bfefff89e30be04624c9feec9ab3",
+      "block_number": 797
+    },
+    {
+      "case_id": "OTHER-CASE-3c795fbc138746a2b55aab4f8bc7c5a8",
+      "verdict": "INSUFFICIENT",
+      "verification_hash": "0x0838c525df6e527808ec6bf72fe46851d996475c999fd812722f03c95dd00679",
+      "tx_hash": "0x3ecc1d42608eb5e86991d547659ad1917229df7da3ae7049a89898cdc26733af",
+      "block_number": 801
+    }
+  ]
+}
