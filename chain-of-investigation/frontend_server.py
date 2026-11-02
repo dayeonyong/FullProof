@@ -208,7 +208,8 @@ def case_view(record):
 
 @app.get('/api/v1/frontend/cases')
 def frontend_cases():
-    core.require_chain()
+    # Listing previously stored records must not depend on Sepolia RPC uptime.
+    # Chain operations still validate on-chain state in their own endpoints.
     return [case_view(c) for c in list(core.cases_db.values())]
 
 
