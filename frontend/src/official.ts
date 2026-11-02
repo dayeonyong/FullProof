@@ -1,7 +1,8 @@
 /** UI adapter for official final-mentor-v11 @7998973. No client-side verdicts. */
 import type {Case,Draft,Proof,System,Mapping,Scenario,Verification,VerificationRequest} from './api';
 import {mappingMessage,reviewMessage,closeMessage} from './signing';
-import {signedMessage} from './wallet';
+import {signedMessage,walletAccount} from './wallet';
+import {sendWalletContractTransaction} from './walletTransaction';
 import {computeIntegrity,type IntegrityData} from './integrity';
 import {startVerification} from './verificationRequests';
 const base=import.meta.env.VITE_API_BASE_URL||'/backend';
@@ -95,7 +96,26 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
  }
  match=path.match(/^\/api\/v1\/cases\/([^/]+)\/close$/);
  if(match&&b){
-  const config=await getConfig(),data:Record<string,unknown>={reason:b.reason_text,nonce:crypto.randomUUID(),deadline:Math.floor(Date.now()/1000)+900};
+  const config=await getConfig();
+  if(config.chain.chain_id===11155111){
+   const admin=config.chain.admin_address;
+   if(!admin||!config.chain.contract_address)throw Error('관리자 지갑 또는 컨트랙트 주소 설정이 없습니다.');
+   const account=await walletAccount(admin,11155111,config.chain.rpc_url);
+   const reason=String(b.reason_text||'').trim();
+   const prepared=await request<{from:string;to:string;data:string;gas:string;value:string}>(
+    '/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/close/prepare',
+    {admin_address:account,reason});
+   if(prepared.from.toLowerCase()!==account.toLowerCase()||
+      prepared.to.toLowerCase()!==config.chain.contract_address.toLowerCase())throw Error('관리자 거래 대상이 일치하지 않습니다.');
+   const provider=window.ethereum;
+   if(!provider)throw Error('MetaMask가 필요합니다.');
+   const txHash=await sendWalletContractTransaction(provider,{
+    from:prepared.from,to:prepared.to,data:prepared.data,gas:prepared.gas,value:prepared.value
+   });
+   return request('/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/close/confirm',
+    {tx_hash:txHash,admin_address:account,reason});
+  }
+  const data:Record<string,unknown>={reason:b.reason_text,nonce:crypto.randomUUID(),deadline:Math.floor(Date.now()/1000)+900};
   const signed=await signedMessage(config,'admin',account=>{data.signer_address=account;return closeMessage(config.chain.chain_id!,config.chain.contract_address!,match![1],data)});
   return request(path,{...data,signature:signed.signature});
  }
