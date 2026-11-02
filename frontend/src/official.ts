@@ -30,6 +30,23 @@ let lastCase:Case|null=null;
 export async function officialRequest<T>(path:string,body?:unknown):Promise<T>{
  const result=await dispatch(path,body as Record<string,unknown>|undefined);return result as T;
 }
+async function createSepoliaDemoCase(id:string,title:string,config:System):Promise<{case_id:string}>{
+ const police='0xF28d8E3890918c9E2A21C3Ed5C59fb450c977494';
+ const account=await walletAccount(police,11155111,config.chain.rpc_url);
+ if(!window.ethereum)throw Error('MetaMask가 필요합니다.');
+ const pendingKey='fullproof.sepolia.case.'+id;
+ let txHash=sessionStorage.getItem(pendingKey);
+ if(!txHash){
+  const prepared=await request<{from:string;to:string;data:string;gas:string;value:string}>('/api/v1/browser-transactions/cases/prepare',{case_id:id,police_address:account});
+  if(prepared.from.toLowerCase()!==account.toLowerCase()||prepared.to.toLowerCase()!==config.chain.contract_address?.toLowerCase())throw Error('계약 또는 지갑 주소 불일치');
+  txHash=await sendWalletContractTransaction(window.ethereum,prepared);
+  sessionStorage.setItem(pendingKey,txHash);
+ }
+ const record=await request<{case_id:string}>('/api/v1/browser-transactions/cases/confirm',{case_id:id,title,police_address:account,tx_hash:txHash});
+ sessionStorage.removeItem(pendingKey);
+ return record;
+}
+
 async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
  if(path==='/api/v1/demo/session')return {token:'LOCAL_UI_ROLE_ONLY'}; // UI role is NOT authentication
  if(path==='/api/v1/system/status')return getConfig();
