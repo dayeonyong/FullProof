@@ -44,8 +44,17 @@ def receipt_status(tx):
 
 
 def audit_rows():
-    with sqlite3.connect(JOURNAL) as db:
-        return [(p, json.loads(v)) for p, v in db.execute('SELECT path,payload FROM audit WHERE namespace=?', (namespace(),))]
+    # Audit rows are supplementary. RPC failure must not hide stored cases.
+    try:
+        current_namespace = namespace()
+        with sqlite3.connect(JOURNAL) as db:
+            return [(p, json.loads(v)) for p, v in db.execute(
+                'SELECT path,payload FROM audit WHERE namespace=?', (current_namespace,))]
+    except (OSError, sqlite3.Error, ValueError, TypeError):
+        return []
+    except Exception:
+        # A remote RPC can raise provider-specific exceptions.
+        return []
 
 
 @app.middleware('http')
@@ -69,9 +78,12 @@ async def journal_success(request, call_next):
 
 
 def public_config():
-    available = bool(core.contract and core.w3.is_connected())
-    if available:
-        available = bool(core.w3.eth.get_code(core.contract.address))
+    try:
+        available = bool(core.contract and core.w3.is_connected())
+        if available:
+            available = bool(core.w3.eth.get_code(core.contract.address))
+    except Exception:
+        available = False
     chain = {'available': available}
     if available:
         agency = os.getenv('UI_AGENCY_ADDRESS', '')
