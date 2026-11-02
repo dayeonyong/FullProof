@@ -109,11 +109,22 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
       prepared.to.toLowerCase()!==config.chain.contract_address.toLowerCase())throw Error('관리자 거래 대상이 일치하지 않습니다.');
    const provider=window.ethereum;
    if(!provider)throw Error('MetaMask가 필요합니다.');
-   const txHash=await sendWalletContractTransaction(provider,{
+   const pendingKey='fullproof.sepolia.close.'+config.chain.contract_address.toLowerCase()+'.'+match[1];
+   let pending: {txHash:string;account:string;reason:string}|null=null;
+   try {
+    const stored=sessionStorage.getItem(pendingKey);
+    if(stored)pending=JSON.parse(stored) as {txHash:string;account:string;reason:string};
+   } catch { throw Error('이전 종결 거래 정보를 확인할 수 없습니다. 기존 기록을 확인해 주세요.'); }
+   if(pending&&(pending.account.toLowerCase()!==account.toLowerCase()||pending.reason!==reason))
+    throw Error('확인 대기 중인 이전 종결 거래가 있습니다. 기존 종결 사유와 계정으로 결과를 확인해 주세요.');
+   const txHash=pending?.txHash||await sendWalletContractTransaction(provider,{
     from:prepared.from,to:prepared.to,data:prepared.data,gas:prepared.gas,value:prepared.value
    });
-   return request('/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/close/confirm',
+   if(!pending)sessionStorage.setItem(pendingKey,JSON.stringify({txHash,account,reason}));
+   const result=await request('/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/close/confirm',
     {tx_hash:txHash,admin_address:account,reason});
+   sessionStorage.removeItem(pendingKey);
+   return result;
   }
   const data:Record<string,unknown>={reason:b.reason_text,nonce:crypto.randomUUID(),deadline:Math.floor(Date.now()/1000)+900};
   const signed=await signedMessage(config,'admin',account=>{data.signer_address=account;return closeMessage(config.chain.chain_id!,config.chain.contract_address!,match![1],data)});
