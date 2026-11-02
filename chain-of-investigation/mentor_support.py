@@ -159,7 +159,7 @@ def public(row):
     result=json.loads(row['result_json']) if row.get('result_json') else None
     return dict(verification_id=row['verification_id'],case_id=row['case_id'],request_state=row['state'],phase=row['phase'],
                 status_url='/api/v1/verification-requests/'+row['verification_id'],tx_hash=row['tx_hash'],
-                result=result if row['state'] in ('CONFIRMED','FAILED') else None,error=row['error'])
+                result=result if row['state'] in ('CONFIRMED','FAILED','AWAITING_WALLET') else None,error=row['error'])
 
 
 def request_status(ident,core):
@@ -173,8 +173,8 @@ def work(ident,inputs,core):
     try:
         result=core.process_v11_verification({**inputs,'verification_id':ident})
         persist_result(core,result)
-        state='CONFIRMED' if result.get('verification_tx_hash') else 'FAILED'
-        update(ident,state=state,phase='COMPLETED' if state=='CONFIRMED' else 'EXTRACTION_OR_DECISION_FAILED',
+        state='CONFIRMED' if result.get('verification_tx_hash') else ('AWAITING_WALLET' if core.w3.eth.chain_id == 11155111 else 'FAILED')
+        update(ident,state=state,phase='COMPLETED' if state=='CONFIRMED' else ('AWAITING_WALLET' if state=='AWAITING_WALLET' else 'EXTRACTION_OR_DECISION_FAILED'),
                result_json=json.dumps(result,ensure_ascii=False),tx_hash=result.get('verification_tx_hash'),error=None)
     except Exception as exc:
         row=row_by_id(ident)
