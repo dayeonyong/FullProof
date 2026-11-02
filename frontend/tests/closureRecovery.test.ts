@@ -2,7 +2,8 @@ import {describe,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
 
 describe('Sepolia closure recovery path',()=>{
- const source=readFileSync('src/official.ts','utf8');
+ const file=readFileSync('src/official.ts','utf8');
+ const source=file.slice(file.indexOf("match=path.match(/^\\/api\\/v1\\/cases\\/([^/]+)\\/close$/)"));
  it('checks saved hash before attempting a new transaction',()=>{
   const pending=source.indexOf('const stored=sessionStorage.getItem(pendingKey)');
   const sending=source.indexOf('txHash=await sendWalletContractTransaction(');
