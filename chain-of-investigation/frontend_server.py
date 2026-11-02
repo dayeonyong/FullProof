@@ -208,6 +208,31 @@ def case_view(record):
 
 # Recovered synthetic local demonstration archive: deliberately kept out of cases_db.
 # Never present these records as Sepolia-confirmed or allow live transaction routes.
+@app.get('/api/v1/frontend/sepolia-preflight')
+def sepolia_preflight():
+    """Read-only check. Never creates a case or signs a transaction."""
+    target_chain = 11155111
+    expected_recorder = '0xF28d8E3890918c9E2A21C3Ed5C59fb450c977494'
+    try:
+        if core.w3.eth.chain_id != target_chain:
+            return {'ready': False, 'chain_id': core.w3.eth.chain_id, 'reason': 'Expected Sepolia chain'}
+        core.require_chain()
+        contract_address = core.contract.address
+        police_registered = bool(core.contract.functions.isPolice(expected_recorder).call())
+        recorder_registered = bool(core.contract.functions.isVerificationRecorder(expected_recorder).call())
+        return {
+            'ready': police_registered and recorder_registered,
+            'chain_id': target_chain,
+            'contract_address': contract_address,
+            'police_address': expected_recorder,
+            'police_registered': police_registered,
+            'verification_recorder_registered': recorder_registered,
+            'note': 'Read-only network and role check; no transaction has been sent.'
+        }
+    except Exception:
+        return {'ready': False, 'chain_id': target_chain, 'reason': 'RPC or contract role check unavailable; no transaction has been sent.'}
+
+
 @app.get('/api/v1/frontend/recovered-demo-cases')
 def recovered_demo_cases():
     archive = Path(__file__).with_name('recovered_local_demo_archive.json')
