@@ -124,10 +124,19 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
     });
    }
    if(!pending)sessionStorage.setItem(pendingKey,JSON.stringify({txHash,account,reason}));
-   const result=await request('/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/close/confirm',
-    {tx_hash:txHash,admin_address:account,reason});
-   sessionStorage.removeItem(pendingKey);
-   return result;
+   const confirmationPath='/api/v1/browser-transactions/cases/'+encodeURIComponent(match[1])+'/close/confirm';
+   for(let attempt=0;attempt<5;attempt++){
+    try{
+     const result=await request(confirmationPath,{tx_hash:txHash,admin_address:account,reason});
+     sessionStorage.removeItem(pendingKey);
+     return result;
+    }catch(error){
+     const status=(error as {status?:number}).status;
+     if(status!==409||attempt===4)throw error;
+     await new Promise<void>(resolve=>setTimeout(resolve,2500));
+    }
+   }
+   throw Error('거래 상태를 확인하지 못했습니다. 다시 확인하면 기존 거래를 재사용합니다.');
   }
   const data:Record<string,unknown>={reason:b.reason_text,nonce:crypto.randomUUID(),deadline:Math.floor(Date.now()/1000)+900};
   const signed=await signedMessage(config,'admin',account=>{data.signer_address=account;return closeMessage(config.chain.chain_id!,config.chain.contract_address!,match![1],data)});
