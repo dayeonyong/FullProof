@@ -314,6 +314,15 @@ def save_team_draft_proof(draft_id: str, body: TeamDraftText):
     return _draft_view(row)
 
 
+@app.get('/api/v1/frontend/recovered-demo-cases/{case_id}')
+def recovered_demo_case_detail(case_id: str):
+    """A registered local case from the recovered DB, not a Sepolia case."""
+    for record in recovered_demo_cases():
+        if record['case_id'] == case_id:
+            return record
+    raise HTTPException(404, 'Recovered local case not found')
+
+
 @app.get('/api/v1/frontend/cases')
 def frontend_cases():
     # Listing previously stored records must not depend on Sepolia RPC uptime.
