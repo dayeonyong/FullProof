@@ -982,6 +982,26 @@ def validate_v11_onchain_claim(claim):
             f"Invalid v1.1 Claim: {e}"
         )
 
+def build_verification_anchor_function(result, verification_hash):
+    """One canonical calldata builder for both server and future wallet paths."""
+    claim = result["claim_ref"]
+    verdicts = {"SUPPORTED": 1, "CONTRADICTED": 2, "INSUFFICIENT": 3}
+    if result.get("verdict") not in verdicts:
+        raise HTTPException(422, "Unsupported verification verdict")
+    return contract.functions.anchorVerification(
+        case_uint(result["case_id"]),
+        result["step_id"],
+        "0x" + hashlib.sha256(result["verification_id"].encode("utf-8")).hexdigest(),
+        "0x" + hashlib.sha256(claim["claim_id"].encode("utf-8")).hexdigest(),
+        claim["claim_version"],
+        claim["claim_hash"],
+        result["proof_refs_hash"],
+        result["policy_hash"],
+        verification_hash,
+        verdicts[result["verdict"]],
+    )
+
+
 def anchor_v11_verification(result):
     """검증 완료된 v1.1 Verification의 온체인 기록 단계"""
 
@@ -1108,20 +1128,10 @@ def anchor_v11_verification(result):
 
     from mentor_support import stage_result, note_submission
     stage_result(result)
-    tx = submit_contract_transaction(contract.functions.anchorVerification(
-            case_uint(result["case_id"]),
-            result["step_id"],
-            verification_id_hash,
-            "0x" + hashlib.sha256(
-                claim_ref["claim_id"].encode("utf-8")
-            ).hexdigest(),
-            claim_ref["claim_version"],
-            claim_ref["claim_hash"],
-            result["proof_refs_hash"],
-            result["policy_hash"],
-            verification_hash,
-            verdict_map[result["verdict"]]
-        ), role="verification")
+    tx = submit_contract_transaction(
+        build_verification_anchor_function(result, verification_hash),
+        role="verification"
+    )
     note_submission(tx)
     tx_hash = confirmed(tx)
 
