@@ -229,6 +229,65 @@ def prepare_browser_case_close(case_id: str, body: BrowserAdminTransactionReques
             "warning": "Unsigned only. Backend must validate receipt before case closure."}
 
 
+
+class BrowserCloseConfirmation(BaseModel):
+    tx_hash: str
+    admin_address: str
+    reason: str
+
+
+@app.post("/api/v1/browser-transactions/cases/{case_id}/close/confirm")
+def confirm_browser_case_close(case_id: str, body: BrowserCloseConfirmation):
+    """Reconcile an already confirmed admin MetaMask transaction.
+
+    Never trusts browser-supplied receipt fields; reads them from Sepolia.
+    Repeated confirmations are safe when the existing close details match.
+    """
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia network required")
+    if not Web3.is_address(body.admin_address):
+        raise HTTPException(422, "Invalid admin address")
+    admin = Web3.to_checksum_address(body.admin_address)
+    if admin.lower() != contract.functions.admin().call().lower():
+        raise HTTPException(403, "Not the contract administrator")
+    record = cases_db.get(case_id)
+    if record is None:
+        raise HTTPException(404, "Case not found")
+    if not body.reason.strip():
+        raise HTTPException(422, "Close reason required")
+    if not isinstance(body.tx_hash, str) or not Web3.is_hex(body.tx_hash) or len(body.tx_hash) != 66:
+        raise HTTPException(422, "Invalid transaction hash")
+    try:
+        receipt = w3.eth.get_transaction_receipt(body.tx_hash)
+    except Exception:
+        raise HTTPException(409, "Transaction not yet confirmed")
+    if receipt.status != 1 or receipt.to is None or receipt.to.lower() != contract.address.lower():
+        raise HTTPException(409, "Successful contract receipt required")
+    transaction = w3.eth.get_transaction(body.tx_hash)
+    if transaction["from"].lower() != admin.lower():
+        raise HTTPException(403, "Transaction not sent by administrator")
+    expected = contract.functions.closeCase(case_uint(case_id), body.reason.strip())._encode_transaction_data()
+    if Web3.to_hex(transaction["input"]).lower() != expected.lower():
+        raise HTTPException(409, "Transaction calldata does not match requested case and reason")
+    matched = any(
+        ev["args"]["caseId"] == case_uint(case_id)
+        and ev["args"]["reason"] == body.reason.strip()
+        and ev["args"]["closer"].lower() == admin.lower()
+        for ev in contract.events.CaseClosed().process_receipt(receipt)
+    )
+    if not matched:
+        raise HTTPException(409, "Matching CaseClosed event missing")
+    if record["is_closed"] and record.get("close_reason") != body.reason.strip():
+        raise HTTPException(409, "Case already closed with a different reason")
+    record["is_closed"] = True
+    record["close_reason"] = body.reason.strip()
+    save_case(record)
+    return {"status": "SUCCESS", "case_id": case_id, "chain_status": "CONFIRMED",
+            "tx_hash": Web3.to_hex(receipt.transactionHash), "closed_by": admin,
+            "close_reason": body.reason.strip()}
+
+
 def require_admin_transaction_wallet():
     """Prevent server-side admin writes from using an unlocked RPC account.
 
