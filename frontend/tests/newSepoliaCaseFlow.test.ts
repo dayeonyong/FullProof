@@ -20,11 +20,13 @@ describe('Backend-owned case list',()=>{
   expect(dashboard).toContain("api<Case>('/api/v1/cases',{title:newCaseTitle.trim()");
   expect(dashboard).toContain('setError(e instanceof Error?e.message');
  });
- it('shows recovered local demo cases as read-only separate from server records',()=>{
-  expect(dashboard).toContain('archived.map(c=><details');
+ it('allows explicit registration of selected recovered local cases without treating local records as confirmed',()=>{
+  expect(dashboard).toContain('registerRecoveredCase(c)');
+  expect(dashboard).toContain('이 사건을 Sepolia에 등록');
   expect(dashboard).toContain("api<RecoveredDemoRecord[]>('/api/v1/frontend/recovered-demo-cases')");
-  expect(dashboard).toContain('읽기 전용');
-  expect(dashboard).toContain('현재 Sepolia에 등록된 사건이 아니며');
+  expect(official).toContain("path==='/api/v1/recovered-cases/register'");
+  expect(official).toContain('await createSepoliaDemoCase(id,title,config)');
+  expect(dashboard).toContain('기존 로컬 사건과 Sepolia의 기록을 혼동하지 않습니다.');
  });
  it('routes Vercel API calls through same-origin /backend proxy',()=>{
   expect(official).toContain("window.location.hostname.endsWith('.vercel.app')?'/backend'");
