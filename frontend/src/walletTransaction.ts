@@ -34,3 +34,31 @@ export async function sendWalletContractTransaction(
   if(typeof hash!=='string'||!/^0x[0-9a-fA-F]{64}$/.test(hash))throw Error('거래 해시를 확인할 수 없습니다.');
   return hash;
 }
+
+export interface TransactionReceipt {
+  transactionHash:string;
+  status:string;
+  to:string|null;
+  from:string;
+}
+
+/** Verify receipt on Sepolia before treating an admin action as recorded.
+ * A confirmed receipt alone does not replace backend business validation.
+ */
+export async function verifyContractReceipt(
+  provider:Provider,
+  txHash:string,
+  expectedContract:string,
+  expectedSender:string,
+):Promise<TransactionReceipt|null>{
+  if(!/^0x[0-9a-fA-F]{64}$/.test(txHash))throw Error('거래 해시가 올바르지 않습니다.');
+  if(!isAddress(expectedContract)||!isAddress(expectedSender))throw Error('지갑 또는 계약 주소가 올바르지 않습니다.');
+  if(await provider.request({method:'eth_chainId'})!=='0xaa36a7')throw Error('Sepolia 네트워크를 선택해 주세요.');
+  const result=await provider.request({method:'eth_getTransactionReceipt',params:[txHash]}) as TransactionReceipt|null;
+  if(result===null)return null;
+  if(result.transactionHash.toLowerCase()!==txHash.toLowerCase()||
+     result.to?.toLowerCase()!==expectedContract.toLowerCase()||
+     result.from.toLowerCase()!==expectedSender.toLowerCase())throw Error('예상한 스마트 계약의 거래가 아닙니다.');
+  if(result.status!=='0x1')throw Error('블록체인 거래가 실패했습니다.');
+  return result;
+}
