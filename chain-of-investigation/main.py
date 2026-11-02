@@ -321,6 +321,55 @@ def prepare_browser_case_creation(body: BrowserCasePrepareRequest):
 
 
 
+
+class BrowserCaseConfirmRequest(BaseModel):
+    case_id: str
+    title: str
+    police_address: str
+    tx_hash: str
+
+
+@app.post("/api/v1/browser-transactions/cases/confirm")
+def confirm_browser_case_creation(body: BrowserCaseConfirmRequest):
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    if not Web3.is_address(body.police_address) or not Web3.is_hex(body.tx_hash) or len(body.tx_hash) != 66:
+        raise HTTPException(422, "Invalid account or transaction hash")
+    police = Web3.to_checksum_address(body.police_address)
+    if not contract.functions.isPolice(police).call() and police.lower() != contract.functions.admin().call().lower():
+        raise HTTPException(403, "Registered police wallet required")
+    try:
+        receipt = w3.eth.get_transaction_receipt(body.tx_hash)
+        transaction = w3.eth.get_transaction(body.tx_hash)
+    except Exception:
+        raise HTTPException(409, "Transaction not confirmed")
+    if receipt.status != 1 or not receipt.to or receipt.to.lower() != contract.address.lower():
+        raise HTTPException(409, "Successful contract transaction required")
+    if transaction["from"].lower() != police.lower():
+        raise HTTPException(403, "Wrong transaction signer")
+    expected = contract.functions.createCase(case_uint(body.case_id))._encode_transaction_data()
+    actual = transaction["input"]
+    actual_hex = actual if isinstance(actual, str) else Web3.to_hex(actual)
+    if actual_hex.lower() != expected.lower():
+        raise HTTPException(409, "Case creation transaction mismatch")
+    events = contract.events.CaseCreated().process_receipt(receipt)
+    if not any(event["args"]["caseId"] == case_uint(body.case_id) for event in events):
+        raise HTTPException(409, "Matching CaseCreated event missing")
+    if body.case_id in cases_db:
+        saved = cases_db[body.case_id]
+        if saved.get("tx_hash", "").lower() != Web3.to_hex(receipt.transactionHash).lower():
+            raise HTTPException(409, "Case ID already associated with another transaction")
+        return saved
+    record = {"case_id": body.case_id, "title": body.title,
+              "is_closed": False, "close_reason": "", "step_count": 0,
+              "steps": [], "tx_hash": Web3.to_hex(receipt.transactionHash)}
+    cases_db[body.case_id] = record
+    save_case(record)
+    return record
+
+
+
 def require_admin_transaction_wallet():
     """Prevent server-side admin writes from using an unlocked RPC account.
 
