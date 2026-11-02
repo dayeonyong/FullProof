@@ -1219,6 +1219,14 @@ def process_v11_verification(validated_inputs):
     ):
         return result
 
+    if w3.eth.chain_id == 11155111:
+        # Persist an immutable, backend-produced verdict; do not spend the server
+        # wallet or claim that it is on chain until a browser receipt is verified.
+        from mentor_support import stage_result
+        result["verification_hash"] = validate_v11_verification_hashes(result)
+        stage_result(result)
+        return result
+
     anchor_result = anchor_v11_verification(result)
 
     result["verification_tx_hash"] = (
