@@ -2,7 +2,7 @@ import {OperationError} from './Details';
 import {caseTitle,caseReference} from './presentation';
 import {useContext,useEffect,useState} from 'react';
 import {Link} from 'react-router-dom';
-import {ArrowUpRight,CheckCircle2,ChevronRight,FileCheck2,FileText,Fingerprint,FolderOpen,Layers3,RefreshCw,Search,ShieldCheck,UploadCloud,Clock3} from 'lucide-react';
+import {ArrowRight,ArrowUpRight,CheckCircle2,ChevronRight,FileCheck2,FileText,Fingerprint,FolderOpen,Layers3,RefreshCw,Search,ShieldCheck,UploadCloud,Clock3} from 'lucide-react';
 import {api,fmt,isRecorded,short} from './api';
 import type {Case,Role} from './api';
 import {Session} from './session';
