@@ -20,6 +20,11 @@ describe('Backend-owned case list',()=>{
   expect(dashboard).toContain("api<Case>('/api/v1/cases',{title:newCaseTitle.trim()");
   expect(dashboard).toContain('setError(e instanceof Error?e.message');
  });
+ it('shows recovered local demo cases as read-only separate from server records',()=>{
+  expect(dashboard).toContain('recoveredDemoCases.map(c=><div');
+  expect(dashboard).toContain('로컬 시연 · 읽기 전용');
+  expect(dashboard).toContain('현재 Sepolia에 등록된 사건이 아니며');
+ });
  it('preserves MetaMask-backed creation code separately',()=>{
   expect(official).toContain('await createSepoliaDemoCase(id');
   expect(official).toContain('/api/v1/browser-transactions/cases/confirm');
