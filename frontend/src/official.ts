@@ -135,6 +135,24 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
  if(path==='/api/v1/system/status')return getConfig();
  if(path==='/api/v1/demo/scenarios')return scenarios.map(s=>({...s,claim_text:lastCase?scenarioClaim(lastCase):s.claim_text}));
  if(path==='/api/v1/cases'&&!b){const rows=await request<Case[]>('/api/v1/frontend/cases');return rows}
+ if(path==='/api/v1/recovered-cases/register'&&b){
+  const id=String(b.case_id||''),title=String(b.title||'');
+  if(!/^FP-(supported|contradicted|insufficient)-[a-f0-9]{8}$/.test(id))throw Error('복구 사건 ID가 올바르지 않습니다.');
+  const archive=await request<Array<{case_id:string;title:string}>>('/api/v1/frontend/recovered-demo-cases');
+  if(!archive.some(c=>c.case_id===id&&c.title===title))throw Error('기존 복구 데이터베이스에 존재하는 사건만 등록할 수 있습니다.');
+  const config=await getConfig();
+  if(config.chain.chain_id!==11155111||!config.chain.available)throw Error('Sepolia 연결 상태를 확인해 주세요.');
+  const preflight=await request<{ready:boolean;reason?:string}>('/api/v1/frontend/sepolia-preflight');
+  if(!preflight.ready)throw Error('Sepolia 등록 권한 확인 실패: '+(preflight.reason||'수사관 지갑 권한을 확인해 주세요.'));
+  let existing:Case|null=null;
+  try{existing=await getCase(id)}catch(e){if((e as {status?:number}).status!==404)throw e}
+  if(!existing){
+   await createSepoliaDemoCase(id,title,config);
+  }
+  const current=await getCase(id);
+  if(!current.steps?.length)await createSepoliaDemoStep(id,config);
+  return getCase(id);
+ }
  if(path==='/api/v1/cases'&&b){
   const config=await getConfig();
   const casePendingKey='fullproof.sepolia.pendingCase';
