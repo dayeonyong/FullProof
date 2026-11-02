@@ -1,5 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
-import {sendWalletContractTransaction} from '../src/walletTransaction';
+import {sendWalletContractTransaction,verifyContractReceipt} from '../src/walletTransaction';
 import type {Provider} from '../src/wallet';
 
 const from='0xF28d8E3890918c9E2A21C3Ed5C59fb450c977494';
@@ -33,4 +33,22 @@ describe('MetaMask Sepolia transaction submission',()=>{
   await expect(sendWalletContractTransaction({request} as Provider,{from,to:'bad',data:'0x1234'})).rejects.toThrow('잘못된');
   expect(request).not.toHaveBeenCalled();
  });
+ it('checks transaction receipt sender, contract, and success status',async()=>{
+  const request=vi.fn(async({method}:{method:string})=>method==='eth_chainId'?'0xaa36a7':{
+   transactionHash:hash,status:'0x1',from,to
+  });
+  const receipt=await verifyContractReceipt({request} as Provider,hash,to,from);
+  expect(receipt?.status).toBe('0x1');
+ });
+ it('does not treat a pending transaction as confirmed',async()=>{
+  const request=vi.fn(async({method}:{method:string})=>method==='eth_chainId'?'0xaa36a7':null);
+  expect(await verifyContractReceipt({request} as Provider,hash,to,from)).toBeNull();
+ });
+ it('rejects a receipt for the wrong contract',async()=>{
+  const request=vi.fn(async({method}:{method:string})=>method==='eth_chainId'?'0xaa36a7':{
+   transactionHash:hash,status:'0x1',from,to:'0x0000000000000000000000000000000000000001'
+  });
+  await expect(verifyContractReceipt({request} as Provider,hash,to,from)).rejects.toThrow('예상한');
+ });
+
 });
