@@ -1817,6 +1817,59 @@ def anchor_agency_proof(data: ProofAttestationSchema):
     }
 
 
+
+class BrowserProofPrepareRequest(ProofAttestationSchema):
+    payer_address: str
+
+
+@app.post("/api/v1/browser-transactions/proofs/prepare")
+def prepare_browser_proof(data: BrowserProofPrepareRequest):
+    """Prepare, never broadcast, an institution-signed Proof attestation."""
+    from browser_tx import prepare_contract_transaction
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    if not Web3.is_address(data.payer_address):
+        raise HTTPException(422, "Valid payer wallet required")
+    payer = Web3.to_checksum_address(data.payer_address)
+    draft = PROOF_DRAFTS.get((data.case_id, data.proof_id, data.proof_version))
+    if not draft or draft["status"] != "UNSIGNED":
+        raise HTTPException(409, "Unsigned Proof Draft required")
+    proof = draft["proof_content"]
+    if "0x" + hashlib.sha256(draft["source_bytes"]).hexdigest() != proof["source_sha256"]:
+        raise HTTPException(409, "Source integrity check failed")
+    if v11_proof_hash(proof) != data.proof_hash:
+        raise HTTPException(409, "Proof content hash mismatch")
+    case = cases_db.get(data.case_id)
+    if not case or case["is_closed"] or data.step_id >= len(case["steps"]):
+        raise HTTPException(409, "Open case and valid step required")
+    if not Web3.is_address(data.agency):
+        raise HTTPException(422, "Agency wallet invalid")
+    agency = Web3.to_checksum_address(data.agency)
+    proof_id_hash = "0x" + hashlib.sha256(data.proof_id.encode()).hexdigest()
+    signed = draft["typed_data"]["message"]
+    expected = {"caseId": str(case_uint(data.case_id)), "stepId": str(data.step_id),
+                "proofIdHash": proof_id_hash, "proofVersion": str(data.proof_version),
+                "proofHash": data.proof_hash, "occurredAt": str(data.occurred_at),
+                "issuedAt": str(data.issued_at), "agency": agency,
+                "nonce": str(data.nonce), "deadline": str(data.deadline)}
+    if expected != signed:
+        raise HTTPException(409, "Signed Proof does not match draft")
+    if not isinstance(data.signature, str) or not data.signature.startswith("0x") or len(data.signature) != 132:
+        raise HTTPException(422, "Institution signature invalid")
+    attestation = (case_uint(data.case_id), data.step_id, proof_id_hash,
+                   data.proof_version, data.proof_hash, data.occurred_at,
+                   data.issued_at, agency, data.nonce, data.deadline)
+    try:
+        tx = prepare_contract_transaction(
+            w3, contract.functions.anchorProofAttestation(attestation, data.signature), payer)
+    except Exception as exc:
+        raise HTTPException(409, f"Proof signing/preflight rejected: {exc}")
+    return {"from": payer, "to": tx["to"], "data": tx["data"],
+            "gas": hex(tx["gas"]), "value": hex(tx.get("value", 0))}
+
+
+
 @app.get("/api/v1/cases/{case_id}/steps/{step_id}/agency-proofs")
 def get_agency_proof_history(case_id: str, step_id: int):
     require_chain()
