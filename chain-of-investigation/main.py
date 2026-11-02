@@ -2965,6 +2965,37 @@ class V11ReviewRequest(BaseModel):
     reason_text: str = ""
 
 
+
+class BrowserReviewRequest(V11ReviewRequest):
+    admin_address: str
+
+
+@app.post("/api/v1/browser-transactions/verifications/{verification_id}/reviews/prepare")
+def prepare_browser_review(verification_id: str, body: BrowserReviewRequest):
+    from browser_review import prepare_review_transaction
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    if not Web3.is_address(body.admin_address):
+        raise HTTPException(422, "Invalid wallet address")
+    admin = Web3.to_checksum_address(body.admin_address)
+    if admin.lower() != contract.functions.admin().call().lower():
+        raise HTTPException(403, "Administrator wallet required")
+    verification = V11_VERIFICATION_RESULTS.get(verification_id)
+    if verification is None:
+        raise HTTPException(404, "Verification not found")
+    try:
+        tx = prepare_review_transaction(w3, contract, verification, verification_id, body.review_status, admin)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    except Exception as exc:
+        raise HTTPException(409, f"Review preflight failed: {exc}")
+    return {"from": admin, "to": tx["to"], "data": tx["data"],
+            "gas": hex(tx["gas"]), "value": hex(tx.get("value", 0)),
+            "review_status": body.review_status, "verification_id": verification_id}
+
+
+
 class V11SignedReviewRequest(V11ReviewRequest):
     signer_address: str
     signature: str
