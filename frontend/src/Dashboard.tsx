@@ -21,7 +21,7 @@ function statusFor(c:Case,role:Role){
 }
 export default function Dashboard(){
  const {role,system}=useContext(Session),info=roleInfo[role],navigate=useNavigate();
- const [cases,setCases]=useState<Case[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[query,setQuery]=useState(''),[filter,setFilter]=useState('ALL'),[region,setRegion]=useState('ALL'),[scenario,setScenario]=useState('supported'),[opening,setOpening]=useState(false),[fresh,setFresh]=useState(false),[workOnly,setWorkOnly]=useState(false);
+ const [cases,setCases]=useState<Case[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[query,setQuery]=useState(''),[filter,setFilter]=useState('ALL'),[region,setRegion]=useState('ALL'),[scenario,setScenario]=useState('supported'),[opening,setOpening]=useState(false),[fresh,setFresh]=useState(true),[workOnly,setWorkOnly]=useState(false);
  async function refresh(){setLoading(true);setError('');try{setCases(await api<Case[]>('/api/v1/cases'))}catch(e){setError(e instanceof Error?e.message:'사건 조회 실패')}finally{setLoading(false)}}
  useEffect(()=>{setWorkOnly(false);void refresh()},[role]);
  async function openScenario(){
@@ -29,6 +29,7 @@ export default function Dashboard(){
   try{
    const existing=cases.filter(c=>c.scenario_id===scenario&&c.status!=='CLOSED').at(-1);
    if(existing&&!fresh){navigate(caseLink(role,existing.case_id));return}
+   if(system?.chain.chain_id===11155111&&!window.ethereum){throw Error('MetaMask가 설치되어 있지 않습니다. MetaMask 확장 프로그램이 설치된 브라우저에서 사건을 생성해 주세요.')}
    const c=await api<Case>('/api/v1/cases',{title:scenarios.find(s=>s.id===scenario)!.number+' · '+scenarios.find(s=>s.id===scenario)!.title,scenario_id:scenario});navigate(caseLink(role,c.case_id));
   }catch(e){setError(e instanceof Error?e.message:'사건을 열지 못했습니다.');await refresh()}finally{setOpening(false);window.dispatchEvent(new CustomEvent('fullproof:busy',{detail:false}))}
  }
