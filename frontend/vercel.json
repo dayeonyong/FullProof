@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/backend/:path*",
+      "destination": "https://fullproof-backend.onrender.com/:path*"
+    },
+    {
+      "source": "/((?!backend/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
