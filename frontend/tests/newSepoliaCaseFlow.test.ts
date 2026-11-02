@@ -11,7 +11,8 @@ describe('Backend-owned case list',()=>{
   expect(dashboard).not.toContain('openScenario()');
  });
  it('does not silently create a transaction when browsing real cases',()=>{
-  expect(dashboard).not.toContain("api<Case>('/api/v1/cases',{");
+  expect(dashboard).toContain("api<Case>('/api/v1/cases',{title:newCaseTitle.trim()");
+  expect(dashboard).toContain('to={caseLink(role,c.case_id)}');
   expect(official).toContain("request<Case[]>('/api/v1/frontend/cases')");
  });
  it('has direct case creation without hardcoded mock cards',()=>{
