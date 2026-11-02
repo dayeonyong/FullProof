@@ -5,7 +5,7 @@ import {signedMessage,walletAccount} from './wallet';
 import {sendWalletContractTransaction} from './walletTransaction';
 import {computeIntegrity,type IntegrityData} from './integrity';
 import {startVerification} from './verificationRequests';
-const base=import.meta.env.VITE_API_BASE_URL||'/backend';
+const base=typeof window!=='undefined'&&window.location.hostname.endsWith('.vercel.app')?'/backend':(import.meta.env.VITE_API_BASE_URL||'/backend');
 export async function request<T>(path:string,body?:unknown):Promise<T>{
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),150000);
  const method=body===undefined?'GET':'POST';
