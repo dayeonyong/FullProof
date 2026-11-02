@@ -10,6 +10,14 @@ describe('Sepolia closure recovery path',()=>{
   expect(sending).toBeGreaterThan(pending);
   expect(source).toContain('if(!txHash){');
  });
+ it('retries receipt confirmation without sending another wallet transaction',()=>{
+  const retry=source.indexOf('for(let attempt=0;attempt<5;attempt++)');
+  const confirmation=source.indexOf('await request(confirmationPath,');
+  expect(retry).toBeGreaterThan(0);
+  expect(confirmation).toBeGreaterThan(retry);
+  expect(source).toContain('if(status!==409||attempt===4)throw error;');
+  expect(source).toContain('sessionStorage.removeItem(pendingKey)');
+ });
  it('only removes pending record after backend confirms',()=>{
   const confirmed=source.indexOf("const result=await request('/api/v1/browser-transactions/cases/'");
   const removed=source.indexOf('sessionStorage.removeItem(pendingKey)');
