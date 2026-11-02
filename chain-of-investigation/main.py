@@ -188,6 +188,7 @@ def submit_contract_transaction(contract_function, role="sender"):
 
 class BrowserAdminTransactionRequest(BaseModel):
     admin_address: str
+    reason: str
 
 
 @app.post("/api/v1/browser-transactions/cases/{case_id}/close/prepare")
@@ -211,7 +212,21 @@ def prepare_browser_case_close(case_id: str, body: BrowserAdminTransactionReques
         raise HTTPException(404, "Case not found")
     if record["is_closed"]:
         raise HTTPException(409, "Case already closed")
-    raise HTTPException(422, "Closure reason must be supplied with a signed admin request")
+    reason = body.reason.strip()
+    if not reason:
+        raise HTTPException(422, "Closure reason is required")
+    try:
+        fn = contract.functions.closeCase(case_uint(case_id), reason)
+        tx = prepare_contract_transaction(w3, fn, admin)
+    except (BrowserTransactionError, ValueError) as exc:
+        raise HTTPException(422, str(exc))
+    except Exception as exc:
+        raise HTTPException(409, f"Contract closure preflight rejected: {exc}")
+    return {"chain_id": 11155111, "contract_address": contract.address,
+            "from": admin, "to": tx["to"], "data": tx["data"],
+            "gas": hex(tx["gas"]), "value": hex(tx.get("value", 0)),
+            "case_id": case_id, "reason": reason,
+            "warning": "Unsigned only. Backend must validate receipt before case closure."}
 
 
 def require_admin_transaction_wallet():
