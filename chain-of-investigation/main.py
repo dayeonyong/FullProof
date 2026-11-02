@@ -63,6 +63,7 @@ app.add_middleware(
         "http://localhost:5500",
         "http://127.0.0.1:5500",
         "https://fullproof-frontend.vercel.app",
+        "https://calm-gingersnap-d8bbc4.netlify.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
