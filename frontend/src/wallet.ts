@@ -10,7 +10,7 @@ export async function walletAccount(expected:string|string[],chainId:number,rpc=
  const wanted='0x'+chainId.toString(16);
  if(await eth.request({method:'eth_chainId'})!==wanted){
   try{await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:wanted}]})}
-  catch(e){if((e as {code?:number}).code!==4902)throw e;await eth.request({method:'wallet_addEthereumChain',params:[{chainId:wanted,chainName:'FullProof Local Hardhat',rpcUrls:[rpc],nativeCurrency:{name:'Test ETH',symbol:'ETH',decimals:18}}]});await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:wanted}]})}
+  catch(e){if((e as {code?:number}).code!==4902)throw e;await eth.request({method:'wallet_addEthereumChain',params:[{chainId:wanted,chainName:chainId===11155111?'Sepolia':'FullProof Local Hardhat',rpcUrls:[rpc],nativeCurrency:{name:'Test ETH',symbol:'ETH',decimals:18}}]});await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:wanted}]})}
  }
  await assertWallet(accounts[0],wanted);return accounts[0];
 }
