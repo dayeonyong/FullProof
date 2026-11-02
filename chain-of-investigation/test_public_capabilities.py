@@ -8,9 +8,8 @@ class PublicCapabilitiesTests(unittest.TestCase):
         tree = ast.parse(Path(__file__).with_name("frontend_server.py").read_text(encoding="utf-8"))
         functions = {n.name: ast.unparse(n) for n in tree.body if isinstance(n, ast.FunctionDef)}
         status = functions["public_config"]
-        self.assertIn("core.get_server_address()", status)
-        self.assertIn("isPolice(server_wallet)", status)
-        self.assertIn("isVerificationRecorder(server_wallet)", status)
+        self.assertIn("core.w3.eth.chain_id == 11155111", status)
+        self.assertIn("server_transactions_ready = False", status)
         self.assertIn("claim_anchor=server_transactions_ready", status)
         self.assertIn("verification_anchor=server_transactions_ready", status)
 
