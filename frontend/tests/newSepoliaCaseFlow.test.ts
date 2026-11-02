@@ -21,8 +21,9 @@ describe('Backend-owned case list',()=>{
   expect(dashboard).toContain('setError(e instanceof Error?e.message');
  });
  it('shows recovered local demo cases as read-only separate from server records',()=>{
-  expect(dashboard).toContain('recoveredDemoCases.map(c=><div');
-  expect(dashboard).toContain('로컬 시연 · 읽기 전용');
+  expect(dashboard).toContain('archived.map(c=><details');
+  expect(dashboard).toContain("api<RecoveredDemoRecord[]>('/api/v1/frontend/recovered-demo-cases')");
+  expect(dashboard).toContain('읽기 전용');
   expect(dashboard).toContain('현재 Sepolia에 등록된 사건이 아니며');
  });
  it('routes Vercel API calls through same-origin /backend proxy',()=>{
