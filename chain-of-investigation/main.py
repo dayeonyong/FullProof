@@ -2996,6 +2996,84 @@ def prepare_browser_review(verification_id: str, body: BrowserReviewRequest):
 
 
 
+
+class BrowserReviewConfirmation(V11ReviewRequest):
+    admin_address: str
+    tx_hash: str
+
+
+@app.post("/api/v1/browser-transactions/verifications/{verification_id}/reviews/confirm")
+def confirm_browser_review(verification_id: str, body: BrowserReviewConfirmation):
+    from uuid import uuid4
+    require_chain()
+    if w3.eth.chain_id != 11155111:
+        raise HTTPException(409, "Sepolia required")
+    if not Web3.is_address(body.admin_address):
+        raise HTTPException(422, "Invalid wallet address")
+    admin = Web3.to_checksum_address(body.admin_address)
+    if admin.lower() != contract.functions.admin().call().lower():
+        raise HTTPException(403, "Administrator wallet required")
+    verification = V11_VERIFICATION_RESULTS.get(verification_id)
+    if not verification or verification.get("processing_status") != "COMPLETED":
+        raise HTTPException(409, "Completed verification required")
+    if body.review_status == "ACCEPTED" and verification.get("verdict") != "SUPPORTED":
+        raise HTTPException(409, "Only SUPPORTED results can be accepted")
+    if not isinstance(body.tx_hash, str) or len(body.tx_hash) != 66 or not Web3.is_hex(body.tx_hash):
+        raise HTTPException(422, "Invalid transaction hash")
+    try:
+        receipt = w3.eth.get_transaction_receipt(body.tx_hash)
+        transaction = w3.eth.get_transaction(body.tx_hash)
+    except Exception:
+        raise HTTPException(409, "Transaction not confirmed")
+    if receipt.status != 1 or not receipt.to or receipt.to.lower() != contract.address.lower():
+        raise HTTPException(409, "Successful contract transaction required")
+    if transaction["from"].lower() != admin.lower():
+        raise HTTPException(403, "Wrong transaction signer")
+    case_id = verification["case_id"]
+    step_id = verification["step_id"]
+    verification_hash = verification["verification_hash"]
+    identity = "0x" + hashlib.sha256(verification_id.encode("utf-8")).hexdigest()
+    actions = {"ACCEPTED": 1, "ACKNOWLEDGED": 2, "REVISION_REQUESTED": 3}
+    expected = contract.functions.recordVerificationReview(
+        case_uint(case_id), step_id, identity, verification_hash, actions[body.review_status]
+    )._encode_transaction_data()
+    actual = transaction["input"]
+    actual_hex = actual if isinstance(actual, str) else Web3.to_hex(actual)
+    if actual_hex.lower() != expected.lower():
+        raise HTTPException(409, "Review transaction calldata mismatch")
+    events = contract.events.VerificationReviewAnchored().process_receipt(receipt)
+    if not any(
+        e["args"]["caseId"] == case_uint(case_id)
+        and e["args"]["stepId"] == step_id
+        and Web3.to_hex(e["args"]["verificationIdHash"]).lower() == identity.lower()
+        and Web3.to_hex(e["args"]["verificationHash"]).lower() == verification_hash.lower()
+        and int(e["args"]["action"]) == actions[body.review_status]
+        and e["args"]["reviewer"].lower() == admin.lower()
+        for e in events
+    ):
+        raise HTTPException(409, "Matching administrator review event missing")
+    tx_hash = Web3.to_hex(receipt.transactionHash)
+    from database import load_v11_store, save_v11_store
+    key = "browser_review_receipts"
+    stored = load_v11_store(key)
+    if tx_hash in stored:
+        return v11_success(stored[tx_hash])
+    review = {
+        "schema_version": "1.1", "review_id": "REVIEW-" + uuid4().hex,
+        "case_id": case_id, "step_id": step_id,
+        "verification_id": verification_id, "verification_hash": verification_hash,
+        "review_status": body.review_status, "reviewer_id": admin,
+        "reviewed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "reason_code": body.reason_code, "reason_text": body.reason_text,
+        "review_tx_hash": tx_hash, "chain_status": "CONFIRMED",
+    }
+    review["review_hash"] = v11_sha256(review)
+    stored[tx_hash] = review
+    save_v11_store(key, stored)
+    return v11_success(review)
+
+
+
 class V11SignedReviewRequest(V11ReviewRequest):
     signer_address: str
     signature: str
