@@ -78,7 +78,7 @@ def public_config():
         signer = None
         if agency and core.Web3.is_address(agency):
             info = core.contract.functions.agencies(core.Web3.to_checksum_address(agency)).call()
-            signer = info[1]  # AgencyInfo: type, signer, active
+            signer = info[2]  # AgencyInfo: type, active, signer
         chain.update(chain_id=core.w3.eth.chain_id, contract_address=core.contract.address,
                      agency_address=agency, signer_address=signer,
                      agency_nonce=str(core.contract.functions.agencyNonces(core.Web3.to_checksum_address(agency)).call()) if agency else None,
