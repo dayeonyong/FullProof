@@ -71,9 +71,17 @@ async function createSepoliaDemoStep(id:string,config:System):Promise<void>{
   hash=await sendWalletContractTransaction(window.ethereum,prepared);
   sessionStorage.setItem(pendingKey,hash);
  }
- await request('/api/v1/browser-transactions/cases/'+encodeURIComponent(id)+'/steps/confirm',
-  {police_address:account,step_name:stepName,is_required:true,tx_hash:hash});
- sessionStorage.removeItem(pendingKey);
+ const confirmPath='/api/v1/browser-transactions/cases/'+encodeURIComponent(id)+'/steps/confirm';
+ for(let attempt=0;attempt<5;attempt++){
+  try{
+   await request(confirmPath,{police_address:account,step_name:stepName,is_required:true,tx_hash:hash});
+   sessionStorage.removeItem(pendingKey);
+   return;
+  }catch(error){
+   if((error as {status?:number}).status!==409||attempt===4)throw error;
+   await new Promise<void>(resolve=>setTimeout(resolve,2500));
+  }
+ }
 }
 
 async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
