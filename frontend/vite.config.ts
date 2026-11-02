@@ -18,5 +18,5 @@ function readOnlyRpc(target:string):Plugin{
 }
 export default defineConfig(({mode})=>{
  const env=loadEnv(mode,process.cwd(),'');
- return {plugins:[react(),readOnlyRpc(env.VITE_RPC_TARGET||'http://127.0.0.1:8545')],server:{port:5173,strictPort:true,allowedHosts:['terminal.local','tan-standard-theoretical-privacy.trycloudflare.com'],proxy:{'/backend':{target:env.VITE_BACKEND_TARGET||'http://127.0.0.1:8000',changeOrigin:true,rewrite:p=>p.replace(/^\/backend/,'')}}}};
+ return {plugins:[react(),readOnlyRpc(env.VITE_RPC_TARGET||'http://127.0.0.1:8545')],server:{port:5173,strictPort:true,allowedHosts:['terminal.local','.trycloudflare.com'],proxy:{'/backend':{target:env.VITE_BACKEND_TARGET||'http://127.0.0.1:8000',changeOrigin:true,rewrite:p=>p.replace(/^\/backend/,'')}}}};
 });
