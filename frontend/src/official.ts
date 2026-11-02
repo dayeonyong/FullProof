@@ -86,8 +86,10 @@ async function dispatch(path:string,b?:Record<string,unknown>):Promise<unknown>{
   const record=existingCase||(config.chain.chain_id===11155111
    ? await createSepoliaDemoCase(id,String(b.title||''),config)
    : await request<{case_id:string}>('/api/v1/cases',{case_id:id,title:b.title}));
-  try{if(config.chain.chain_id===11155111)await createSepoliaDemoStep(id,config);
-      else await request('/api/v1/cases/'+id+'/steps',{step_name:'통화 사실 확인',is_required:true})}catch(e){throw Error('사건은 생성되었지만 단계 생성 응답이 불명확합니다. 사건을 열어 단계 상태를 확인하세요. '+(e as Error).message)}
+  try{if(config.chain.chain_id===11155111){
+       const state=await getCase(id);
+       if(!state.steps?.length)await createSepoliaDemoStep(id,config);
+      }else await request('/api/v1/cases/'+id+'/steps',{step_name:'통화 사실 확인',is_required:true})}catch(e){throw Error('사건은 생성되었지만 단계 생성 응답이 불명확합니다. 사건을 열어 단계 상태를 확인하세요. '+(e as Error).message)}
   const finished=await getCase(record.case_id);
   if(config.chain.chain_id===11155111)sessionStorage.removeItem(casePendingKey);
   return finished;
