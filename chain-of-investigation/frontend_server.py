@@ -206,6 +206,18 @@ def case_view(record):
                 close_eligible=eligible,close_blockers=blockers,close_tx_hash=hx(c.get('close_tx_hash') or close.get('tx_hash')),closed_at=None)
 
 
+# Recovered synthetic local demonstration archive: deliberately kept out of cases_db.
+# Never present these records as Sepolia-confirmed or allow live transaction routes.
+@app.get('/api/v1/frontend/recovered-demo-cases')
+def recovered_demo_cases():
+    archive = Path(__file__).with_name('recovered_local_demo_archive.json')
+    if not archive.exists():
+        return []
+    with archive.open('r', encoding='utf-8') as stream:
+        records = json.load(stream)
+    return records
+
+
 @app.get('/api/v1/frontend/cases')
 def frontend_cases():
     # Listing previously stored records must not depend on Sepolia RPC uptime.
