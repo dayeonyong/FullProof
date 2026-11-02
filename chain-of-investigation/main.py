@@ -268,7 +268,9 @@ def confirm_browser_case_close(case_id: str, body: BrowserCloseConfirmation):
     if transaction["from"].lower() != admin.lower():
         raise HTTPException(403, "Transaction not sent by administrator")
     expected = contract.functions.closeCase(case_uint(case_id), body.reason.strip())._encode_transaction_data()
-    if Web3.to_hex(transaction["input"]).lower() != expected.lower():
+    actual_input = transaction["input"]
+    actual_hex = actual_input if isinstance(actual_input, str) else Web3.to_hex(actual_input)
+    if actual_hex.lower() != expected.lower():
         raise HTTPException(409, "Transaction calldata does not match requested case and reason")
     matched = any(
         ev["args"]["caseId"] == case_uint(case_id)
