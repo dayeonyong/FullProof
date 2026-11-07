@@ -27,7 +27,8 @@ class AnalyzeRequest(BaseModel):
     evidence: list[dict] = Field(default_factory=list)
 
 
-def register_ai_routes(app, cases_db, *, trusted_validator=None, policy_pack=None, db_path=None):
+def register_ai_routes(app, cases_db, *, trusted_validator=None, policy_pack=None, db_path=None,
+                       verification_resolver=None, extraction_resolver=None):
     store = AnalysisStore(db_path or os.getenv('AI_DB_PATH', str(Path(__file__).parent / 'data' / 'ai.sqlite3')))
     # Deliberately fail closed on the unsafe legacy path; keep unrelated routes.
     app.router.routes[:] = [r for r in app.router.routes
@@ -89,6 +90,11 @@ def register_ai_routes(app, cases_db, *, trusted_validator=None, policy_pack=Non
             raise HTTPException(404, 'Case not found')
         return {'case_id': case_id, 'history': store.history(case_id)}
 
+    from verification_v11 import register_v11_routes
+    register_v11_routes(app, resolver=verification_resolver)
+    if extraction_resolver is not None:
+        from verification_v11 import register_v11_extraction_route
+        register_v11_extraction_route(app, resolver=extraction_resolver)
     return store
 
 
@@ -103,7 +109,13 @@ class AnchorRequest(BaseModel):
 
 
 def register_signed_draft_routes(app, cases_db, store, chain_context, *, policy_pack=None):
-    """Existing institution signs Claim + Proof + verdict as Jisu's contract expects.
+    """LEGACY v1 ONLY: incompatible with v1.1 ProofAttestation / Domain version 2.
+
+    Do not register this function for the v1.1 integration. It signs Claim +
+    Proof + verdict for the old contract. Merely adding proofVersion cannot
+    migrate its anchorProof arguments or its signature validation semantics.
+    v1.1 uses register_v11_routes for decisions; the backend owns independent
+    institution ProofAttestation creation, validation and anchoring.
 
     Unsigned drafts are explicitly provisional. After signing, anchoring uses
     immutable stored bytes/results and never reruns an LLM. No fabricated VALID
