@@ -38,6 +38,8 @@ from database import (
     load_latest_case_checkpoint,
     list_case_checkpoints,
     save_proof_result_atomic,
+    save_v11_store,
+    load_v11_store
 )
 
 from eth_account.messages import encode_typed_data
@@ -170,7 +172,7 @@ def v11_proof_hash(proof):
 
 # FullProof v1.1 - Mock Draft 보관
 # 개발용 메모리 저장. 서버 재시작 시 초기화된다.
-PROOF_DRAFTS = {}
+PROOF_DRAFTS = load_v11_store("proof_drafts")
 
 
 class ProofDraftSchema(BaseModel):
@@ -312,6 +314,7 @@ def create_proof_draft(data: ProofDraftSchema):
         "typed_data": typed_data,
         "status": "UNSIGNED"
     }
+    save_v11_store("proof_drafts", PROOF_DRAFTS)
 
     return {
         "success": True,
@@ -1330,6 +1333,8 @@ def anchor_agency_proof(data: ProofAttestationSchema):
         )
 
     draft["status"] = "ANCHORED"
+     # 블록체인 등록 결과를 SQLite에 저장
+    save_v11_store("proof_drafts", PROOF_DRAFTS)
     # 6. 결과 반환
     return {
         "schema_version": "1.1",
@@ -2219,8 +2224,10 @@ from uuid import uuid4
 
 # MVP temporary stores.
 # Not persistent across server restart or multiple workers.
-V11_MAPPING_HISTORY = {}
-V11_VERIFICATION_RESULTS = {}
+V11_MAPPING_HISTORY = load_v11_store("mapping_history")
+V11_VERIFICATION_RESULTS = load_v11_store(
+    "verification_results"
+)
 
 
 def v11_now():
@@ -2385,6 +2392,9 @@ def create_v11_mapping(
     V11_MAPPING_HISTORY.setdefault(
         key, []
     ).append(mapping)
+
+    # 생성된 매핑을 SQLite에 저장
+    save_v11_store("mapping_history", V11_MAPPING_HISTORY)
 
     return v11_success(mapping)
 
@@ -2578,6 +2588,9 @@ def confirm_v11_mapping(
         "proof_hash": draft["proof_hash"]
     }
 
+     # 확정된 매핑 정보를 SQLite에 저장
+    save_v11_store("mapping_history", V11_MAPPING_HISTORY)
+
     return v11_success(mapping)
 
 
@@ -2664,7 +2677,41 @@ def create_v11_verification(
             verification_id
         ] = result
 
+        # Verification 결과를 SQLite에 저장
+        save_v11_store(
+            "verification_results",
+            V11_VERIFICATION_RESULTS
+        )
+
     return v11_success(result)
+
+
+@app.get("/api/v1/verifications/{verification_id}")
+def get_v11_verification(verification_id: str):
+    result = V11_VERIFICATION_RESULTS.get(verification_id)
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Verification not found"
+        )
+
+    fields = (
+        "verification_id",
+        "case_id",
+        "step_id",
+        "processing_status",
+        "verdict",
+        "verification_hash",
+        "verification_tx_hash",
+        "policy_hash",
+    )
+
+    return v11_success({
+        key: result[key]
+        for key in fields
+        if key in result
+    })
 
 
 # ------------------------------------------------------------

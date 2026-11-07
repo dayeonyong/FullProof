@@ -43,3 +43,5 @@ fullproof.db-wal
 fullproof.db-shm
 
 checkpoint-backup.local.json
+
+main_checkpoint_backup.local.py
